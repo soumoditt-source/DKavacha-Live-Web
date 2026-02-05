@@ -1,0 +1,8 @@
+{
+  "name": "DKavacha Live Web v2.5.0 Ultimate",
+  "description": "Enterprise Grade AI Fraud Detection with Voice Sentinel & Haptic Feedback. ©2026 Soumoditya Das.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
