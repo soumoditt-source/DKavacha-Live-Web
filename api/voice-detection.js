@@ -53,18 +53,36 @@ export default async function handler(req, res) {
   try {
     const ai = new GoogleGenAI({ apiKey: googleKey });
     
-    // Detailed Prompt for all supported languages
+    // 🕵️ ULTIMATE FORENSIC PROMPT (API VERSION)
     const prompt = `
-      Perform forensic audio analysis for Deepfake/Voice Cloning artifacts.
-      Language Context: ${language}.
-      Supported Languages: Tamil, English, Hindi, Malayalam, Telugu, Bengali, Gujarati, Marathi, Kannada, Odia.
-
-      Analyze for:
-      - Synthetic prosody (unnatural rhythm)
-      - Metallic spectral artifacts
-      - Zero-breath continuity (AI often forgets to breathe)
+      Act as a Lead Audio Forensic Analyst. Analyze the provided audio sample for signs of Generative AI cloning.
       
-      Classify as either "AI_GENERATED" or "HUMAN".
+      Target Language: ${language}.
+
+      ### 🔬 FORENSIC PROTOCOL:
+      1. **MFCC Analysis (Mel-Frequency Cepstral Coefficients)**:
+         - Inspect cepstral coefficients for mathematical smoothness. 
+         - **Real Human**: Contains organic micro-tremors and irregular noise floor in vocal folds.
+         - **AI/Cloned**: Often exhibits over-smoothed spectral envelopes and phase coherence issues.
+      
+      2. **Frequency Domain (Hz) Check**:
+         - **Fundamental Frequency (F0)**: Analyze 85Hz-255Hz range. Look for natural jitter and shimmer.
+         - **High-Frequency Artifacts (>7kHz)**: Look for "metallic" ringing or phase discontinuities.
+      
+      3. **Temporal Dynamics**:
+         - **Breath Detection**: Identify "Zero-Breath" continuity.
+         - **Prosody**: Check for unnatural flatness.
+
+      ### 📝 OUTPUT REQUIREMENT:
+      Classify strictly based on artifacts.
+      - Return **AI_GENERATED** if phase issues, metallic artifacts, or lack of micro-tremors are found.
+      - Return **HUMAN** if natural breath, organic jitter, and full-spectrum resonance are present.
+
+      Return JSON ONLY.
+      {
+        "classification": "AI_GENERATED" | "HUMAN",
+        "confidenceScore": number
+      }
     `;
 
     const response = await ai.models.generateContent({
@@ -84,25 +102,31 @@ export default async function handler(req, res) {
           type: Type.OBJECT,
           properties: {
             classification: { type: Type.STRING, enum: ['AI_GENERATED', 'HUMAN'] },
-            confidence: { type: Type.NUMBER }
+            confidenceScore: { type: Type.NUMBER }
           }
         }
       }
     });
 
-    // FIX: response.text is a property, not a function
+    // ACCESS AS PROPERTY
     const text = response.text;
     
     if (!text) {
         throw new Error('Empty response from AI');
     }
 
-    const result = JSON.parse(text);
+    let result;
+    try {
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        result = JSON.parse(cleanText);
+    } catch (e) {
+        throw new Error('AI Response Malformed JSON');
+    }
 
     return res.status(200).json({
       classification: result.classification,
-      confidence: result.confidence || 0.99,
-      processedBy: 'DKavacha-Neural-V2'
+      confidence: result.confidenceScore || 0.99,
+      processedBy: 'DKavacha-Neural-V2-ULTIMATE'
     });
 
   } catch (error) {

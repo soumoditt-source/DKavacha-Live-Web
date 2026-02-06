@@ -36,7 +36,7 @@ export class DeepfakeScannerComponent {
   apiKeyError = signal('');
   googleKeyError = signal('');
   
-  selectedLang = signal<SupportedLanguage>('English');
+  selectedLang = signal<SupportedLanguage>('Auto-Detect');
   selectedFile = signal<File | null>(null);
   base64Audio = signal<string>('');
   
@@ -47,6 +47,7 @@ export class DeepfakeScannerComponent {
   errorMessage = signal('');
 
   languages: SupportedLanguage[] = [
+      'Auto-Detect',
       'English', 'Tamil', 'Hindi', 'Malayalam', 'Telugu', 
       'Bengali', 'Gujarati', 'Marathi', 'Kannada', 'Odia'
   ];
