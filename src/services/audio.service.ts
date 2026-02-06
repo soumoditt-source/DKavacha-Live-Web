@@ -1,8 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
-
-// Types for Web Speech API
-declare var webkitSpeechRecognition: any;
-declare var SpeechRecognition: any;
+import { Injectable, signal } from '@angular/core';
 
 @Injectable({
   providedIn: 'root'
@@ -14,10 +10,10 @@ export class AudioService {
   private source: MediaStreamAudioSourceNode | null = null;
   
   // --- VOCAL ISOLATION & SPECTRAL GATING CHAIN ---
-  private lowCutFilter: BiquadFilterNode | null = null; // High-pass (removes rumble)
-  private lowPassFilter: BiquadFilterNode | null = null; // Low-pass (removes hiss) - Renamed from highCutFilter for clarity
-  private vocalPresenceFilter: BiquadFilterNode | null = null; // Peaking (boosts voice)
-  private spectralGateCompressor: DynamicsCompressorNode | null = null; // Noise gate
+  private lowCutFilter: BiquadFilterNode | null = null; 
+  private lowPassFilter: BiquadFilterNode | null = null; 
+  private vocalPresenceFilter: BiquadFilterNode | null = null; 
+  private spectralGateCompressor: DynamicsCompressorNode | null = null; 
 
   private recognition: any = null;
   private synthesis: SpeechSynthesis = window.speechSynthesis;
@@ -40,7 +36,6 @@ export class AudioService {
       const load = () => {
           this.voices = this.synthesis.getVoices();
       };
-      
       load();
       if (this.synthesis.onvoiceschanged !== undefined) {
           this.synthesis.onvoiceschanged = load;
@@ -61,7 +56,6 @@ export class AudioService {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
-      
       this.recognition.continuous = true;
       this.recognition.interimResults = true;
       this.recognition.lang = this.currentLang(); 
@@ -105,8 +99,6 @@ export class AudioService {
           } catch (e) { }
         }
       };
-    } else {
-        console.error('Web Speech API not supported.');
     }
   }
 
@@ -124,36 +116,34 @@ export class AudioService {
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
-      this.analyser.smoothingTimeConstant = 0.6; // Smoother visualizer
+      this.analyser.smoothingTimeConstant = 0.6;
 
-      // --- SPECTRAL GATING PIPELINE ---
-      
-      // 1. Low Cut (High Pass): Remove sub-bass noise (< 85Hz)
+      // 1. Low Cut (85Hz)
       this.lowCutFilter = this.audioContext.createBiquadFilter();
       this.lowCutFilter.type = 'highpass';
       this.lowCutFilter.frequency.value = 85;
 
-      // 2. Low Pass (High Cut): Remove high-frequency hiss (> 4000Hz)
+      // 2. Low Pass (4000Hz)
       this.lowPassFilter = this.audioContext.createBiquadFilter();
       this.lowPassFilter.type = 'lowpass';
       this.lowPassFilter.frequency.value = 4000; 
 
-      // 3. Vocal Presence: Boost 2.5kHz for intelligibility
+      // 3. Vocal Boost (2500Hz)
       this.vocalPresenceFilter = this.audioContext.createBiquadFilter();
       this.vocalPresenceFilter.type = 'peaking';
       this.vocalPresenceFilter.frequency.value = 2500;
       this.vocalPresenceFilter.Q.value = 1.0;
       this.vocalPresenceFilter.gain.value = 4.0; 
 
-      // 4. Spectral Gate / Compressor
+      // 4. Dynamics
       this.spectralGateCompressor = this.audioContext.createDynamicsCompressor();
       this.spectralGateCompressor.threshold.value = -35; 
       this.spectralGateCompressor.knee.value = 30; 
-      this.spectralGateCompressor.ratio.value = 8; // Slightly lower ratio for more natural dynamics
+      this.spectralGateCompressor.ratio.value = 8; 
       this.spectralGateCompressor.attack.value = 0.005;
       this.spectralGateCompressor.release.value = 0.20;
 
-      // Connect Chain: Source -> LowCut -> LowPass -> VocalBoost -> Compressor -> Analyser
+      // Chain
       this.source.connect(this.lowCutFilter);
       this.lowCutFilter.connect(this.lowPassFilter);
       this.lowPassFilter.connect(this.vocalPresenceFilter);
@@ -163,9 +153,7 @@ export class AudioService {
       this.isRecording.set(true);
       
       if (this.recognition) {
-          try {
-              this.recognition.start();
-          } catch(e) { console.log('Recognition active'); }
+          try { this.recognition.start(); } catch(e) {}
       }
       
       this.updateFrequencyData();
@@ -181,6 +169,15 @@ export class AudioService {
     this.isRecording.set(false);
     this.speak("Uplink Terminated.", true);
     
+    // Proper Cleanup of Audio Nodes
+    try {
+        if (this.source) this.source.disconnect();
+        if (this.lowCutFilter) this.lowCutFilter.disconnect();
+        if (this.lowPassFilter) this.lowPassFilter.disconnect();
+        if (this.vocalPresenceFilter) this.vocalPresenceFilter.disconnect();
+        if (this.spectralGateCompressor) this.spectralGateCompressor.disconnect();
+    } catch(e) { console.warn('Node disconnect error', e); }
+
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
       this.mediaStream = null;
@@ -197,7 +194,6 @@ export class AudioService {
   private updateFrequencyData() {
     if (!this.isRecording() || !this.analyser) return;
 
-    // Throttle to 30fps for performance
     setTimeout(() => {
         if (!this.isRecording() || !this.analyser) return;
         
@@ -206,7 +202,7 @@ export class AudioService {
         this.frequencyData.set(dataArray);
         
         requestAnimationFrame(() => this.updateFrequencyData());
-    }, 33);
+    }, 33); // 30 FPS throttle
   }
 
   speak(text: string, force = false) {
@@ -236,7 +232,6 @@ export class AudioService {
       const gain = this.audioContext.createGain();
       
       osc.type = 'sawtooth';
-      
       const now = this.audioContext.currentTime;
       osc.frequency.setValueAtTime(880, now); 
       osc.frequency.exponentialRampToValueAtTime(440, now + 0.5); 
@@ -246,7 +241,6 @@ export class AudioService {
       
       osc.connect(gain);
       gain.connect(this.audioContext.destination);
-      
       osc.start();
       osc.stop(now + 0.6);
   }
