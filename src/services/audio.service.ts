@@ -14,11 +14,10 @@ export class AudioService {
   private source: MediaStreamAudioSourceNode | null = null;
   
   // --- VOCAL ISOLATION & SPECTRAL GATING CHAIN ---
-  // We use a band-pass approach to simulate spectral gating of noise outside vocal range
-  private lowCutFilter: BiquadFilterNode | null = null; // Cuts sub-bass rumble
-  private lowPassFilter: BiquadFilterNode | null = null; // Cuts high hiss
-  private vocalPresenceFilter: BiquadFilterNode | null = null; // Boosts speech intelligibility
-  private spectralGateCompressor: DynamicsCompressorNode | null = null; // Soft-knee noise gate
+  private lowCutFilter: BiquadFilterNode | null = null; // High-pass (removes rumble)
+  private lowPassFilter: BiquadFilterNode | null = null; // Low-pass (removes hiss) - Renamed from highCutFilter for clarity
+  private vocalPresenceFilter: BiquadFilterNode | null = null; // Peaking (boosts voice)
+  private spectralGateCompressor: DynamicsCompressorNode | null = null; // Noise gate
 
   private recognition: any = null;
   private synthesis: SpeechSynthesis = window.speechSynthesis;
@@ -38,7 +37,6 @@ export class AudioService {
   }
 
   private initVoices() {
-      // Async voice loading
       const load = () => {
           this.voices = this.synthesis.getVoices();
       };
@@ -49,15 +47,12 @@ export class AudioService {
       }
   }
 
-  // Allow dynamic language switching for better accuracy
   setLanguage(lang: string) {
       this.currentLang.set(lang);
       if (this.recognition) {
           this.recognition.lang = lang;
-          // Restart if currently recording to apply change
           if (this.isRecording()) {
               this.recognition.stop(); 
-              // onend will handle restart
           }
       }
   }
@@ -67,9 +62,8 @@ export class AudioService {
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
       
-      // Robust Configuration
-      this.recognition.continuous = true; // Keep listening
-      this.recognition.interimResults = true; // Real-time feedback
+      this.recognition.continuous = true;
+      this.recognition.interimResults = true;
       this.recognition.lang = this.currentLang(); 
       this.recognition.maxAlternatives = 1;
 
@@ -86,41 +80,33 @@ export class AudioService {
           }
         }
         
-        // Update live stream text (what is currently being spoken)
         this.liveStreamText.set(interimTranscript || newFinalTranscript);
 
-        // Append to full transcript log if there's a final result
         if (newFinalTranscript) {
            this.transcript.update(t => {
              const updated = t + ' ' + newFinalTranscript;
-             // Keep last 5k chars (Reduced from 10k for performance)
              return updated.slice(-5000).trim(); 
            });
         }
       };
 
       this.recognition.onerror = (event: any) => {
-        // Silent error handling for 'no-speech' to prevent spamming logs
         if (event.error !== 'no-speech') {
              console.warn('Speech Recognition Warning:', event.error);
         }
       };
 
       this.recognition.onend = () => {
-        // Robust auto-restart (Always-On Sentinel Mode)
         if (this.isRecording()) {
           try {
-            // Tiny delay to prevent CPU thrashing on rapid close/open loops
             setTimeout(() => {
                 if (this.isRecording()) this.recognition.start();
             }, 100);
-          } catch (e) {
-             // Ignore if already started
-          }
+          } catch (e) { }
         }
       };
     } else {
-        console.error('Web Speech API not supported in this browser.');
+        console.error('Web Speech API not supported.');
     }
   }
 
@@ -131,7 +117,6 @@ export class AudioService {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.audioContext = new AudioContext();
       
-      // Ensure AudioContext is running (crucial for some browsers)
       if (this.audioContext.state === 'suspended') {
           await this.audioContext.resume();
       }
@@ -139,36 +124,36 @@ export class AudioService {
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
-      this.analyser.smoothingTimeConstant = 0.5;
+      this.analyser.smoothingTimeConstant = 0.6; // Smoother visualizer
 
       // --- SPECTRAL GATING PIPELINE ---
+      
       // 1. Low Cut (High Pass): Remove sub-bass noise (< 85Hz)
       this.lowCutFilter = this.audioContext.createBiquadFilter();
       this.lowCutFilter.type = 'highpass';
       this.lowCutFilter.frequency.value = 85;
 
-      // 2. High Cut (Low Pass): Remove high-frequency hiss (> 4000Hz)
+      // 2. Low Pass (High Cut): Remove high-frequency hiss (> 4000Hz)
       this.lowPassFilter = this.audioContext.createBiquadFilter();
       this.lowPassFilter.type = 'lowpass';
       this.lowPassFilter.frequency.value = 4000; 
 
-      // 3. Vocal Presence: Boost 2-3kHz for intelligibility
+      // 3. Vocal Presence: Boost 2.5kHz for intelligibility
       this.vocalPresenceFilter = this.audioContext.createBiquadFilter();
       this.vocalPresenceFilter.type = 'peaking';
       this.vocalPresenceFilter.frequency.value = 2500;
       this.vocalPresenceFilter.Q.value = 1.0;
       this.vocalPresenceFilter.gain.value = 4.0; 
 
-      // 4. Spectral Gate / Dynamics Compressor
-      // Acts as a noise gate for quiet sounds and compressor for loud ones
+      // 4. Spectral Gate / Compressor
       this.spectralGateCompressor = this.audioContext.createDynamicsCompressor();
-      this.spectralGateCompressor.threshold.value = -30; // Gate threshold
-      this.spectralGateCompressor.knee.value = 40; // Soft knee for natural transition
-      this.spectralGateCompressor.ratio.value = 12; // High compression for consistency
-      this.spectralGateCompressor.attack.value = 0.003; // Fast attack
-      this.spectralGateCompressor.release.value = 0.25; // Slow release
+      this.spectralGateCompressor.threshold.value = -35; 
+      this.spectralGateCompressor.knee.value = 30; 
+      this.spectralGateCompressor.ratio.value = 8; // Slightly lower ratio for more natural dynamics
+      this.spectralGateCompressor.attack.value = 0.005;
+      this.spectralGateCompressor.release.value = 0.20;
 
-      // Connect Chain: Source -> LowCut -> HighCut -> VocalBoost -> Compressor -> Analyser
+      // Connect Chain: Source -> LowCut -> LowPass -> VocalBoost -> Compressor -> Analyser
       this.source.connect(this.lowCutFilter);
       this.lowCutFilter.connect(this.lowPassFilter);
       this.lowPassFilter.connect(this.vocalPresenceFilter);
@@ -180,19 +165,15 @@ export class AudioService {
       if (this.recognition) {
           try {
               this.recognition.start();
-          } catch(e) {
-              console.log('Recognition already active');
-          }
+          } catch(e) { console.log('Recognition active'); }
       }
       
       this.updateFrequencyData();
-      
-      // Greet user on connection
-      this.speak("Sentinel Uplink Established. Voice Monitoring Active.", true);
+      this.speak("Sentinel Uplink Established.", true);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
-      alert('Could not access microphone. Ensure permissions are granted.');
+      alert('Microphone access denied.');
     }
   }
 
@@ -205,9 +186,7 @@ export class AudioService {
       this.mediaStream = null;
     }
     
-    if (this.recognition) {
-      this.recognition.stop();
-    }
+    if (this.recognition) this.recognition.stop();
     
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
@@ -218,8 +197,7 @@ export class AudioService {
   private updateFrequencyData() {
     if (!this.isRecording() || !this.analyser) return;
 
-    // Performance Fix: Throttle update rate to ~24fps (40ms) instead of 60fps
-    // This frees up main thread for voice processing and UI responsiveness
+    // Throttle to 30fps for performance
     setTimeout(() => {
         if (!this.isRecording() || !this.analyser) return;
         
@@ -227,24 +205,18 @@ export class AudioService {
         this.analyser.getByteFrequencyData(dataArray);
         this.frequencyData.set(dataArray);
         
-        // Use requestAnimationFrame only for the scheduling, but inside the timeout
         requestAnimationFrame(() => this.updateFrequencyData());
-    }, 40);
+    }, 33);
   }
 
   speak(text: string, force = false) {
     if (!this.voiceEnabled() && !force) return;
-    
     if (force) this.synthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.rate = 1.1;
-    utterance.pitch = 1.0;
     
-    // Attempt to pick a good voice
-    if (this.voices.length === 0) {
-        this.voices = this.synthesis.getVoices();
-    }
+    if (this.voices.length === 0) this.voices = this.synthesis.getVoices();
 
     const preferredVoice = this.voices.find(v => v.name.includes('Google') && v.name.includes('Female')) 
                         || this.voices.find(v => v.name.includes('Female')) 
@@ -257,9 +229,7 @@ export class AudioService {
 
   playSiren() {
       if (!this.voiceEnabled()) return;
-      
       if (!this.audioContext) this.audioContext = new AudioContext();
-      // Ensure we resume if suspended
       if (this.audioContext.state === 'suspended') this.audioContext.resume();
 
       const osc = this.audioContext.createOscillator();
