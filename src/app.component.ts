@@ -237,6 +237,7 @@ export class AppComponent implements OnInit {
     
     // Simulate BIOS Loading Sequence
     setTimeout(() => {
+        // SET KEY GLOBALLY
         this.configService.setApiKey(this.inputKey);
         this.fraudService.loadModel();
         
