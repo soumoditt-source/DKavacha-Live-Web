@@ -52,6 +52,7 @@ export class FraudNetService {
   // --- NOTIFICATION & PREFERENCE STATE ---
   activeCriticalAlert = signal<CriticalAlert | null>(null);
   
+  // Default Prefs: All ON for maximum safety
   prefs = signal<NotificationPreferences>(this.loadPreferences());
 
   // --- THREAT DICTIONARY 2026 (ENHANCED BANKING/THEFT) ---
@@ -65,10 +66,10 @@ export class FraudNetService {
     { word: 'arrest warrant', risk: 0.98, msg: 'Fake Arrest Warrant' },
     
     // 💳 CREDIT CARD / BANKING THEFT (High Precision)
-    { word: 'credit card', risk: 0.99, msg: 'Credit Card Solicitation' }, // ADDED
-    { word: 'debit card', risk: 0.99, msg: 'Debit Card Solicitation' }, // ADDED
-    { word: 'bank account', risk: 0.95, msg: 'Bank Account Phishing' }, // ADDED
-    { word: 'give me your', risk: 0.85, msg: 'Suspicious Request Pattern' }, // ADDED
+    { word: 'credit card', risk: 0.99, msg: 'Credit Card Solicitation' }, 
+    { word: 'debit card', risk: 0.99, msg: 'Debit Card Solicitation' }, 
+    { word: 'bank account', risk: 0.95, msg: 'Bank Account Phishing' }, 
+    { word: 'give me your', risk: 0.85, msg: 'Suspicious Request Pattern' }, 
     { word: '16 digit', risk: 0.99, msg: 'Credit Card Number Solicitation' },
     { word: 'card number', risk: 0.95, msg: 'Card Details Requested' },
     { word: 'expiry date', risk: 0.95, msg: 'Card Expiry Requested' },
@@ -233,7 +234,7 @@ export class FraudNetService {
       // 🚨 Trigger Logic - Lowered threshold for "Warning" to catch things earlier
       if (newProb > 0.75) {
         this.handleThreatTrigger('CRITICAL', detectedMsg);
-      } else if (newProb > 0.4) { // Lowered from 0.45
+      } else if (newProb > 0.4) { 
         this.handleThreatTrigger('WARNING', detectedMsg);
       }
 
@@ -242,7 +243,7 @@ export class FraudNetService {
         probability: newProb,
         detectedKeywords: [...new Set([...current.detectedKeywords, ...detectedWords])].slice(-5), 
         actionRecommendation: action,
-        label: newProb > 0.60 ? 'FRAUD' : 'SAFE', // Lowered from 0.65
+        label: newProb > 0.60 ? 'FRAUD' : 'SAFE', 
         confidence: newProb > 0.8 ? 'HIGH' : 'MEDIUM',
         threatLevel: Math.floor(newProb * 100)
       });
@@ -255,30 +256,49 @@ export class FraudNetService {
 
       if (prefs.minThreshold === 'HIGH' && type === 'WARNING') return;
 
-      // Haptics
+      const now = Date.now();
+      const throttle = type === 'CRITICAL' ? 3000 : 8000;
+
+      // 1. HAPTICS (Always try to vibrate if enabled)
       if (prefs.hapticsEnabled) {
           this.triggerHaptics(type);
       }
 
-      const now = Date.now();
-      // Reduced throttling for faster feedback during demo
-      const throttle = type === 'CRITICAL' ? 3000 : 8000; 
-      
+      // 2. VOICE ALERTS (Speak Twice Logic)
       if (prefs.soundEnabled && (now - this.lastVoiceAlertTime > throttle)) {
-            // Play Siren for Critical
+            
+            // Siren
             if (type === 'CRITICAL') {
                 this.audioService.playSiren();
-                this.reportToCyberCell({ type, message, timestamp: now });
             }
             
-            // TTS Backup
+            // Text to Speech Message
             const prefix = type === 'CRITICAL' ? 'Critical Alert! ' : 'Warning. ';
-            // Speak immediately
-            this.audioService.speak(`${prefix}${message}`, type === 'CRITICAL');
+            const fullMessage = `${prefix} ${message}`;
+            
+            // First Speech
+            this.audioService.speak(fullMessage, type === 'CRITICAL');
+            
+            // Second Speech (Delayed by 2.5s)
+            // Using setTimeout to create a natural pause, ensuring it says it exactly twice
+            setTimeout(() => {
+                 this.audioService.speak("Repeat. " + fullMessage, type === 'CRITICAL');
+            }, 3000);
             
             this.lastVoiceAlertTime = now;
+            
+            if (type === 'CRITICAL') {
+                 this.reportToCyberCell({ type, message, timestamp: now });
+            }
       }
 
+      // 3. SYSTEM NOTIFICATIONS (Fallback if Voice is OFF, or critical)
+      // Logic: If sound is OFF, we MUST notify. If Critical, we ALWAYS notify.
+      if (!prefs.soundEnabled || type === 'CRITICAL') {
+           this.triggerSystemNotification(type, message);
+      }
+
+      // 4. IN-APP OVERLAY
       if (type === 'CRITICAL' && !this.activeCriticalAlert()) {
           this.activeCriticalAlert.set({
               title: "THREAT DETECTED",
@@ -286,10 +306,6 @@ export class FraudNetService {
               threatLevel: 'HIGH',
               timestamp: Date.now()
           });
-      }
-
-      if (document.visibilityState === 'hidden' || type === 'CRITICAL') {
-           this.triggerSystemNotification(type, message);
       }
   }
 
@@ -312,7 +328,7 @@ export class FraudNetService {
               icon: 'https://cdn-icons-png.flaticon.com/512/564/564619.png',
               tag: 'fraud-alert',
               requireInteraction: type === 'CRITICAL',
-              silent: !this.prefs().soundEnabled
+              silent: false 
           });
           note.onclick = () => { window.focus(); note.close(); };
       }
@@ -331,7 +347,7 @@ export class FraudNetService {
     
     if (probability < 0.01) probability = 0;
 
-    const isFraud = probability > 0.60; // Consistent with analyzeTextContext
+    const isFraud = probability > 0.60;
 
     const result: FraudResult = {
       probability: parseFloat(probability.toFixed(3)),
@@ -360,10 +376,13 @@ export class FraudNetService {
 
   private triggerHaptics(type: 'WARNING' | 'CRITICAL') {
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
+          // Distinct patterns for Warning vs Critical
           if (type === 'CRITICAL') {
-              navigator.vibrate([100, 50, 100, 50, 100, 200, 500, 200, 500]);
+              // SOS Pattern: ... --- ...
+              navigator.vibrate([100,50,100,50,100,200,500,200,500,200,100,50,100,50,100]);
           } else {
-              navigator.vibrate([50, 50, 50]); 
+              // Double Tap
+              navigator.vibrate([50, 100, 50]); 
           }
       }
   }
