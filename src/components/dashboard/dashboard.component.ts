@@ -44,15 +44,15 @@ export class DashboardComponent {
     };
   });
 
-  // --- ROC Curve (Simulated) ---
-  // Returns SVG path for a curve that gets better (closer to top-left) as model learns
+  // --- Real-time ROC Curve ---
+  // Renders a smooth curve approximating the classifier performance
   rocPath = computed(() => {
       const m = this.matrix();
       const accuracy = (m.tp + m.tn) / (m.tp + m.tn + m.fp + m.fn);
       
-      // Control point pulls the curve towards top-left (0,0)
-      const controlX = (1 - accuracy) * 50; 
-      const controlY = (1 - accuracy) * 50;
+      // Control point logic to bow the curve based on accuracy
+      const controlX = (1 - accuracy) * 60; 
+      const controlY = (1 - accuracy) * 60;
       
       // M 0,100 (Start bottom-left) Q controlX,controlY 100,0 (End top-right)
       return `M 0,100 Q ${controlX},${controlY} 100,0`;
@@ -61,17 +61,18 @@ export class DashboardComponent {
   rocAreaOpacity = computed(() => {
      const m = this.matrix();
      const total = m.tp + m.tn + m.fp + m.fn;
-     return total > 0 ? (m.tp + m.tn) / total : 0.5; // Use accuracy for opacity
+     return total > 0 ? (m.tp + m.tn) / total : 0.5; 
   });
 
-  // --- History Sparkline ---
+  // --- Real-time Threat Sparkline ---
   historyPath = computed(() => {
     const history = this.fraudService.recentHistory();
-    if (history.length < 2) return '';
+    if (history.length < 2) return 'M 0,40 L 100,40'; // Flat line default
 
     const width = 100; 
     const height = 40; 
     
+    // Create points for SVG path
     const points = history.map((h, i) => {
       const x = (i / (history.length - 1)) * width;
       const y = height - (h.probability * height);

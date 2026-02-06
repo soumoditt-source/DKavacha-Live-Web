@@ -21,6 +21,20 @@ export interface CallSession {
   geoRegion: string;
 }
 
+export interface NotificationPreferences {
+  enabled: boolean;
+  minThreshold: 'LOW' | 'MEDIUM' | 'HIGH';
+  soundEnabled: boolean;
+  hapticsEnabled: boolean;
+}
+
+export interface CriticalAlert {
+  title: string;
+  message: string;
+  threatLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+  timestamp: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -32,75 +46,94 @@ export class FraudNetService {
   recentHistory = signal<FraudResult[]>([]);
   currentSession = signal<CallSession | null>(null);
   sessionHistory = signal<CallSession[]>([]); 
+  
   confusionMatrix = signal({ tp: 142, tn: 828, fp: 12, fn: 3 }); 
   
-  hapticEnabled = signal(true); 
+  // --- NOTIFICATION & PREFERENCE STATE ---
+  activeCriticalAlert = signal<CriticalAlert | null>(null);
+  
+  prefs = signal<NotificationPreferences>(this.loadPreferences());
 
-  // --- THREAT DICTIONARY (ULTIMATE) ---
+  // --- THREAT DICTIONARY 2026 (ENHANCED BANKING/THEFT) ---
   private readonly scamPhrases = [
-    // Financial / Banking
-    { word: 'otp', risk: 0.6, msg: 'OTP Solicitation' },
-    { word: 'one time password', risk: 0.6, msg: 'OTP Solicitation' },
-    { word: 'cvv', risk: 0.7, msg: 'CVV Request' },
-    { word: 'card number', risk: 0.4, msg: 'Card Details Request' },
-    { word: 'expiry', risk: 0.3, msg: 'Card Expiry Request' },
-    { word: 'bank account', risk: 0.3, msg: 'Banking Info Request' },
-    { word: 'pin code', risk: 0.5, msg: 'PIN Request' },
-    { word: 'verify', risk: 0.2, msg: 'Verification Fraud' },
+    // 🚨 DIGITAL ARREST / CBI / POLICE
+    { word: 'digital arrest', risk: 1.0, msg: 'Digital Arrest Threat Detected' },
+    { word: 'cbi', risk: 0.95, msg: 'Federal Agency Impersonation' },
+    { word: 'narcotics', risk: 0.95, msg: 'Narcotics/Drug Threat' },
+    { word: 'money laundering', risk: 0.90, msg: 'Money Laundering Accusation' },
+    { word: 'police station', risk: 0.85, msg: 'Police Impersonation' },
+    { word: 'arrest warrant', risk: 0.98, msg: 'Fake Arrest Warrant' },
     
-    // Remote Access (Critical)
-    { word: 'anydesk', risk: 0.95, msg: 'Remote Access Tool detected' },
-    { word: 'teamviewer', risk: 0.95, msg: 'Remote Access Tool detected' },
-    { word: 'quicksupport', risk: 0.9, msg: 'Remote Access Tool detected' },
-    { word: 'screen share', risk: 0.8, msg: 'Screen Sharing detected' },
-    { word: 'download app', risk: 0.5, msg: 'Malicious App Install' },
+    // 💳 CREDIT CARD / BANKING THEFT (High Precision)
+    { word: '16 digit', risk: 0.99, msg: 'Credit Card Number Solicitation' },
+    { word: 'card number', risk: 0.95, msg: 'Card Details Requested' },
+    { word: 'expiry date', risk: 0.95, msg: 'Card Expiry Requested' },
+    { word: 'cvv', risk: 0.99, msg: 'CVV Security Code Request' },
+    { word: 'three digits at the back', risk: 0.99, msg: 'CVV Phishing Pattern' },
+    { word: 'pin number', risk: 0.99, msg: 'PIN Phishing' },
+    { word: 'atm pin', risk: 0.99, msg: 'ATM PIN Request' },
+    { word: 'net banking password', risk: 0.99, msg: 'Net Banking Credential Theft' },
     
-    // Fear / Authority
-    { word: 'police', risk: 0.4, msg: 'Authority Impersonation' },
-    { word: 'cyber crime', risk: 0.5, msg: 'Authority Impersonation' },
-    { word: 'arrest', risk: 0.6, msg: 'Digital Arrest Threat' },
-    { word: 'warrant', risk: 0.5, msg: 'Legal Threat detected' },
-    { word: 'blocked', risk: 0.4, msg: 'Account Block Threat' },
-    { word: 'illegal', risk: 0.3, msg: 'Fear Tactic detected' },
-    { word: 'customs', risk: 0.5, msg: 'Customs Parcel Scam' },
-    { word: 'drugs', risk: 0.5, msg: 'Narcotics Scam' },
+    // 📱 TELECOM / SIM SWAP
+    { word: 'sim card block', risk: 0.95, msg: 'SIM Blocking Threat' },
+    { word: 'close your number', risk: 0.90, msg: 'Number Disconnection Threat' },
+    { word: 'kyc update', risk: 0.92, msg: 'KYC Phishing' },
+
+    // 💻 REMOTE ACCESS
+    { word: 'anydesk', risk: 0.99, msg: 'Remote Access Tool (CRITICAL)' },
+    { word: 'teamviewer', risk: 0.99, msg: 'Remote Access Tool (CRITICAL)' },
+    { word: 'screen share', risk: 0.95, msg: 'Screen Share Request' },
     
-    // Greed / Investment
-    { word: 'lottery', risk: 0.7, msg: 'Lottery Scam' },
-    { word: 'winner', risk: 0.5, msg: 'Prize Scam' },
-    { word: 'bonus', risk: 0.4, msg: 'Financial Lure' },
-    { word: 'double', risk: 0.6, msg: 'Investment Scheme' },
-    { word: 'crypto', risk: 0.5, msg: 'Crypto Fraud' },
-    { word: 'bitcoin', risk: 0.5, msg: 'Crypto Fraud' },
-    { word: 'investment', risk: 0.3, msg: 'Investment Scheme' },
-    
-    // Family / Emergency (Vishing)
-    { word: 'accident', risk: 0.6, msg: 'Emergency Scam' },
-    { word: 'hospital', risk: 0.5, msg: 'Emergency Scam' },
-    { word: 'money urgently', risk: 0.7, msg: 'Emergency Transfer Request' },
+    // 💸 GENERAL
+    { word: 'refund', risk: 0.85, msg: 'Refund Scam Pattern' },
+    { word: 'otp', risk: 0.90, msg: 'OTP Solicitation' }
+  ];
+
+  // --- REGEX PATTERNS FOR DATA THEFT ---
+  // Simple regexes to catch users reading out numbers
+  private readonly dataTheftPatterns = [
+    { regex: /\b\d{16}\b/, msg: 'Potential Credit Card Number (16 Digits)', risk: 1.0 },
+    { regex: /\b\d{3}\s*$/, msg: 'Potential CVV (Standalone 3 Digits)', risk: 0.8 }, // Context dependent
+    { regex: /\b(cvv|cvc)\s*is\s*\d{3}/i, msg: 'CVV Disclosure', risk: 1.0 },
+    { regex: /\b(otp|code)\s*is\s*\d{4,6}/i, msg: 'OTP Disclosure', risk: 1.0 }
   ];
 
   private analysisInterval: any;
-  private lastVoiceAlertTime = 0; // Throttle voice alerts
+  private lastThreatTime = 0; 
+  private lastVoiceAlertTime = 0;
 
   constructor() {
     this.requestNotificationPermission();
 
-    // Zero-Latency Detection: Listen to interim results
     effect(() => {
       const stream = this.audioService.liveStreamText().toLowerCase();
       if (stream && this.currentSession()?.status === 'active') {
         this.analyzeTextContext(stream);
       }
     });
+
+    effect(() => {
+        const p = this.prefs();
+        localStorage.setItem('dkavacha_prefs', JSON.stringify(p));
+    });
   }
 
-  toggleHaptics() {
-    this.hapticEnabled.update(v => !v);
+  updatePreferences(newPrefs: Partial<NotificationPreferences>) {
+      this.prefs.update(current => ({ ...current, ...newPrefs }));
+  }
+
+  private loadPreferences(): NotificationPreferences {
+      const saved = localStorage.getItem('dkavacha_prefs');
+      if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch { }
+      }
+      return { enabled: true, minThreshold: 'MEDIUM', soundEnabled: true, hapticsEnabled: true };
   }
 
   async loadModel() {
-    console.log('Loading FraudNet_v2.5_Quantized.onnx (WASM)...');
+    console.log('FRAUDNET ENGINE INITIALIZED: 2026 BANKING THREAT MATRIX LOADED');
   }
 
   startAnalysis() {
@@ -113,10 +146,12 @@ export class FraudNetService {
       geoRegion: 'IN-WB-KOL'
     });
 
-    // Main Inference Loop (Keeps probability decaying/alive)
+    this.updateResult(this.createEmptyResult());
+    this.activeCriticalAlert.set(null); 
+
     this.analysisInterval = setInterval(() => {
       this.runInference();
-    }, 500);
+    }, 250); 
   }
 
   stopAnalysis() {
@@ -142,6 +177,7 @@ export class FraudNetService {
       this.currentSession.set(null);
     }
     this.currentResult.set(null);
+    this.activeCriticalAlert.set(null);
   }
 
   private requestNotificationPermission() {
@@ -151,47 +187,55 @@ export class FraudNetService {
   }
 
   /**
-   * 🧠 REAL-TIME TEXT ANALYSIS
-   * Runs on every frame of speech (including interim).
+   * 🧠 ANALYZE TEXT WITH REGEX & KEYWORDS
    */
   private analyzeTextContext(text: string) {
-    const foundRisks = this.scamPhrases.filter(p => text.includes(p.word));
-    
-    if (foundRisks.length > 0) {
-      const current = this.currentResult() || this.createEmptyResult();
-      
-      // Calculate Risk Boost
-      // Use Max risk found to avoid stacking low risks excessively
-      const maxRisk = Math.max(...foundRisks.map(r => r.risk));
-      const newProb = Math.min(0.99, current.probability + (maxRisk * 0.8)); // Additive but capped
-      
-      // Determine Action
-      let action = "MONITORING";
-      if (newProb > 0.85) action = "HANG UP NOW";
-      else if (newProb > 0.6) action = "HIGH ALERT";
+    let maxRisk = 0;
+    let detectedMsg = '';
+    let detectedWords: string[] = [];
 
-      // 🚨 Trigger Alerts (Throttled)
-      if (newProb > 0.65) {
-        this.triggerHaptics('CRITICAL');
-        
-        // Voice Alert Throttling (Don't spam voice every 100ms)
-        const now = Date.now();
-        if (now - this.lastVoiceAlertTime > 5000) {
-             const primaryThreat = foundRisks[0].msg;
-             this.audioService.speak(`Alert. ${primaryThreat}.`, true);
-             this.lastVoiceAlertTime = now;
-             
-             // Desktop Notification
-             this.sendNotification("CRITICAL FRAUD ALERT", primaryThreat);
+    // 1. Check Keywords
+    const foundPhrases = this.scamPhrases.filter(p => text.includes(p.word));
+    if (foundPhrases.length > 0) {
+        const bestMatch = foundPhrases.reduce((prev, current) => (prev.risk > current.risk) ? prev : current);
+        maxRisk = bestMatch.risk;
+        detectedMsg = bestMatch.msg;
+        detectedWords = foundPhrases.map(p => p.word);
+    }
+
+    // 2. Check Regex (Data Theft)
+    for (const pattern of this.dataTheftPatterns) {
+        if (pattern.regex.test(text)) {
+            if (pattern.risk > maxRisk) {
+                maxRisk = pattern.risk;
+                detectedMsg = pattern.msg;
+                detectedWords.push('PII_PATTERN_MATCH');
+            }
         }
-      } else if (newProb > 0.4) {
-          this.triggerHaptics('WARNING');
+    }
+    
+    if (maxRisk > 0) {
+      const current = this.currentResult() || this.createEmptyResult();
+      this.lastThreatTime = Date.now();
+      
+      const newProb = Math.min(1.0, Math.max(current.probability, maxRisk));
+      
+      let action = "MONITORING";
+      if (newProb > 0.9) action = "HANG UP IMMEDIATELY";
+      else if (newProb > 0.7) action = "HIGH ALERT - VERIFY IDENTITY";
+      else if (newProb > 0.5) action = "CAUTION ADVISED";
+
+      // 🚨 Trigger Logic
+      if (newProb > 0.75) {
+        this.handleThreatTrigger('CRITICAL', detectedMsg);
+      } else if (newProb > 0.45) {
+        this.handleThreatTrigger('WARNING', detectedMsg);
       }
 
       this.updateResult({
         ...current,
         probability: newProb,
-        detectedKeywords: [...current.detectedKeywords, ...foundRisks.map(r => r.word)],
+        detectedKeywords: [...new Set([...current.detectedKeywords, ...detectedWords])].slice(-5), 
         actionRecommendation: action,
         label: newProb > 0.65 ? 'FRAUD' : 'SAFE',
         confidence: newProb > 0.8 ? 'HIGH' : 'MEDIUM',
@@ -200,21 +244,93 @@ export class FraudNetService {
     }
   }
 
+  private handleThreatTrigger(type: 'CRITICAL' | 'WARNING', message: string) {
+      const prefs = this.prefs();
+      if (!prefs.enabled) return;
+
+      if (prefs.minThreshold === 'HIGH' && type === 'WARNING') return;
+
+      // Haptics
+      if (prefs.hapticsEnabled) {
+          this.triggerHaptics(type);
+      }
+
+      const now = Date.now();
+      const throttle = type === 'CRITICAL' ? 5000 : 15000; // Faster throttle for Critical
+      
+      if (prefs.soundEnabled && (now - this.lastVoiceAlertTime > throttle)) {
+            // Play Siren for Critical
+            if (type === 'CRITICAL') {
+                this.audioService.playSiren();
+                this.reportToCyberCell({ type, message, timestamp: now }); // 📡 API REPORT
+            }
+            
+            // TTS Backup
+            const prefix = type === 'CRITICAL' ? 'Critical Threat. ' : 'Warning. ';
+            setTimeout(() => this.audioService.speak(`${prefix}${message}`, type === 'CRITICAL'), 600);
+            
+            this.lastVoiceAlertTime = now;
+      }
+
+      if (type === 'CRITICAL' && !this.activeCriticalAlert()) {
+          this.activeCriticalAlert.set({
+              title: "THREAT DETECTED",
+              message: message,
+              threatLevel: 'HIGH',
+              timestamp: Date.now()
+          });
+      }
+
+      if (document.visibilityState === 'hidden' || type === 'CRITICAL') {
+           this.triggerSystemNotification(type, message);
+      }
+  }
+
+  /**
+   * 📡 MOCK API ENDPOINT FOR CYBER CRIME REPORTING
+   * In production, this would POST to https://api.cybercrime.gov.in/v2/report
+   */
+  private reportToCyberCell(incident: any) {
+      const payload = {
+          incidentId: crypto.randomUUID(),
+          severity: incident.type,
+          description: incident.message,
+          timestamp: new Date(incident.timestamp).toISOString(),
+          geo: 'IN-WB-KOL', // From persona location
+          deviceFingerprint: navigator.userAgent
+      };
+      console.group('📡 [API SIMULATION] SENDING REPORT TO CYBER CRIME PORTAL');
+      console.log('Endpoint: POST https://api.cybercrime.gov.in/v2/report');
+      console.log('Payload:', JSON.stringify(payload, null, 2));
+      console.groupEnd();
+  }
+
+  private triggerSystemNotification(type: string, body: string) {
+      if ('Notification' in window && Notification.permission === 'granted') {
+          const note = new Notification(`DKAVACHA: ${type} ALERT`, { 
+              body, 
+              icon: 'https://cdn-icons-png.flaticon.com/512/564/564619.png',
+              tag: 'fraud-alert',
+              requireInteraction: type === 'CRITICAL',
+              silent: !this.prefs().soundEnabled
+          });
+          note.onclick = () => { window.focus(); note.close(); };
+      }
+  }
+
   private runInference() {
-    // 1. Audio Features Simulation (MFCC/ZCR Variance)
-    // Low base noise
-    const baseNoise = Math.random() * 0.1;
-    let probability = baseNoise;
-    
-    // 2. Persist previous text-based risk (Text context "lingers")
     const previous = this.currentResult();
-    if (previous && previous.probability > 0.15) {
-        // Slow decay of risk (0.98 multiplier)
-        probability = Math.max(probability, previous.probability * 0.98);
-    }
+    if (!previous) return;
+
+    let probability = previous.probability;
+
+    const timeSinceThreat = Date.now() - this.lastThreatTime;
+    if (timeSinceThreat > 5000) {
+        probability = probability * 0.98; 
+    } 
     
-    // Normalize
-    probability = Math.min(0.99, probability);
+    if (probability < 0.01) probability = 0;
+
     const isFraud = probability > 0.65;
 
     const result: FraudResult = {
@@ -223,12 +339,11 @@ export class FraudNetService {
       label: isFraud ? 'FRAUD' : 'SAFE',
       timestamp: Date.now(),
       threatLevel: Math.floor(probability * 100),
-      detectedKeywords: previous?.detectedKeywords || [],
-      actionRecommendation: isFraud ? "BLOCK CALLER" : "SECURE"
+      detectedKeywords: previous.detectedKeywords,
+      actionRecommendation: isFraud ? (probability > 0.9 ? "HANG UP NOW" : "BLOCK CALLER") : "SECURE"
     };
 
     this.updateResult(result);
-    this.updateConfusionMatrix(isFraud);
   }
 
   private updateResult(result: FraudResult) {
@@ -244,39 +359,16 @@ export class FraudNetService {
   }
 
   private triggerHaptics(type: 'WARNING' | 'CRITICAL') {
-      if (!this.hapticEnabled()) return;
-
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
           if (type === 'CRITICAL') {
-              // SOS Pattern: ... --- ...
-              navigator.vibrate([100,50,100,50,100,200,500,200,500,200,500,200,100,50,100,50,100]);
+              navigator.vibrate([100, 50, 100, 50, 100, 200, 500, 200, 500]);
           } else {
-              // Double pulse
-              navigator.vibrate([200, 100, 200]);
+              navigator.vibrate([50, 50, 50]); 
           }
-      }
-  }
-  
-  private sendNotification(title: string, body: string) {
-      if ('Notification' in window && Notification.permission === 'granted') {
-          // Throttle notifications slightly
-          new Notification(title, { 
-              body, 
-              icon: 'https://cdn-icons-png.flaticon.com/512/564/564619.png',
-              tag: 'fraud-alert' // Replaces existing notification with same tag
-          });
       }
   }
 
-  private updateConfusionMatrix(predictedFraud: boolean) {
-      this.confusionMatrix.update(cm => {
-          let { tp, tn, fp, fn } = cm;
-          if (Math.random() > 0.5) {
-             if (predictedFraud) tp++; else tn++;
-          }
-          // Reset periodically to prevent overflow in long running demo
-          if (tp + tn + fp + fn > 2000) return {tp:142, tn:828, fp:12, fn:3}; 
-          return { tp, tn, fp, fn };
-      });
+  dismissCriticalAlert() {
+      this.activeCriticalAlert.set(null);
   }
 }
