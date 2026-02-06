@@ -1,6 +1,6 @@
 {
   "name": "dkavacha-live-web",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -27,7 +27,7 @@
     "@angular/cli": "^19.0.0",
     "@angular/compiler-cli": "^19.0.0",
     "@types/node": "^18.0.0",
-    "typescript": "~5.6.2",
+    "typescript": "~5.5.0",
     "autoprefixer": "^10.4.0",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0"

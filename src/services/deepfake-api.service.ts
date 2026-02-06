@@ -27,19 +27,14 @@ export interface VoiceAnalysisResponse {
 })
 export class DeepfakeApiService {
 
-  /**
-   * REAL-WORLD INFERENCE ENGINE
-   * Uses Google Gemini 2.5 Flash (Multimodal) to analyze audio spectrums.
-   */
-  analyzeVoice(apiKey: string, request: VoiceAnalysisRequest): Observable<VoiceAnalysisResponse> {
+  analyzeVoice(googleKey: string, request: VoiceAnalysisRequest): Observable<VoiceAnalysisResponse> {
     const startTime = Date.now();
 
-    if (!apiKey || apiKey.trim() === '') {
-        return throwError(() => new Error('API Key is missing. Please provide a valid Google GenAI Key.'));
+    if (!googleKey) {
+        return throwError(() => new Error('Google API Key is missing.'));
     }
 
-    // Wrap the Promise-based SDK in an RxJS Observable
-    return from(this.callGeminiModel(apiKey, request)).pipe(
+    return from(this.callGeminiModel(googleKey, request)).pipe(
       map(aiResult => {
         return {
           status: 'success' as const,
@@ -54,8 +49,8 @@ export class DeepfakeApiService {
         };
       }),
       catchError(err => {
-        console.error('Gemini API Error:', err);
-        return throwError(() => new Error(err.message || 'AI Processing Failed'));
+        console.error('AI Error:', err);
+        return throwError(() => new Error(err.message || 'Processing Failed'));
       })
     );
   }
@@ -64,15 +59,14 @@ export class DeepfakeApiService {
     const ai = new GoogleGenAI({ apiKey: key });
 
     const prompt = `
-      You are an elite Digital Forensic AI specialized in Audio Deepfake Detection.
+      Forensic Audio Analysis.
+      Detect Deepfake artifacts in the spectral data.
+      Language: ${req.language}.
       
-      Analyze the provided audio file strictly for artifacts of synthesis, vocoder anomalies, and unnatural spectral continuity.
-      Language context: ${req.language}.
-      
-      Output JSON ONLY using this schema:
+      Output JSON ONLY:
       {
         "classification": "AI_GENERATED" | "HUMAN",
-        "confidenceScore": number (0.0 to 1.0)
+        "confidenceScore": number
       }
     `;
 
@@ -99,25 +93,22 @@ export class DeepfakeApiService {
             type: Type.OBJECT,
             properties: {
               classification: { type: Type.STRING, enum: ['AI_GENERATED', 'HUMAN'] },
-              confidenceScore: { type: Type.NUMBER, description: "Probability score between 0 and 1" }
-            },
-            required: ['classification', 'confidenceScore']
+              confidenceScore: { type: Type.NUMBER }
+            }
           }
         }
       });
 
       const text = response.text();
-      if (!text) throw new Error("Empty response from AI model");
-      
       const json = JSON.parse(text);
+      
       return {
         classification: json.classification,
         confidenceScore: json.confidenceScore
       };
 
     } catch (e: any) {
-      console.error("Critical AI Failure:", e);
-      throw new Error(`Forensic Analysis Failed: ${e.message}`);
+      throw new Error(`AI Analysis Error: ${e.message}`);
     }
   }
 }

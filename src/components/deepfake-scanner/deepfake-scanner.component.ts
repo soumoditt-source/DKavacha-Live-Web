@@ -15,53 +15,40 @@ type ScanStage = 'IDLE' | 'PROCESSING' | 'COMPLETE' | 'ERROR';
     .drag-zone {
         background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%23334155FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
     }
-    .json-key { color: #f472b6; }
-    .json-string { color: #a5f3fc; }
+    .animate-ring {
+      animation: pulse-ring 2s infinite cubic-bezier(0.24, 0, 0.38, 1);
+    }
     @keyframes pulse-ring {
       0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
       70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
       100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
-    }
-    .animate-ring {
-      animation: pulse-ring 2s infinite cubic-bezier(0.24, 0, 0.38, 1);
     }
   `]
 })
 export class DeepfakeScannerComponent {
   apiService = inject(DeepfakeApiService);
 
-  // Form State
-  apiKey = signal('sk_test_123456789');
+  // Configuration Signals
+  apiKey = signal('sk_test_123456789'); // Client Auth Key (Problem Statement)
+  googleKey = signal(''); // Google AI Key (For Functionality)
+  
   apiKeyError = signal('');
+  googleKeyError = signal('');
   
   selectedLang = signal<'Tamil' | 'English' | 'Hindi' | 'Malayalam' | 'Telugu'>('English');
   selectedFile = signal<File | null>(null);
   base64Audio = signal<string>('');
   
-  // Real UI State (No Simulation)
+  // UI State
   scanStage = signal<ScanStage>('IDLE');
   result = signal<VoiceAnalysisResponse | null>(null);
   errorMessage = signal('');
 
   languages = ['Tamil', 'English', 'Hindi', 'Malayalam', 'Telugu'];
 
-  validateApiKey(key: string) {
-      this.apiKey.set(key);
-      const regex = /^sk_test_[a-zA-Z0-9]+$/;
-      if (!key) {
-          this.apiKeyError.set('API Key is required.');
-      } else if (!regex.test(key)) {
-          this.apiKeyError.set('Invalid format. Must start with "sk_test_".');
-      } else {
-          this.apiKeyError.set('');
-      }
-  }
-
   onFileSelected(event: any) {
     const file = event.target.files[0];
-    if (file) {
-      this.processFile(file);
-    }
+    if (file) this.processFile(file);
   }
 
   onDrop(event: DragEvent) {
@@ -76,8 +63,8 @@ export class DeepfakeScannerComponent {
   }
 
   private processFile(file: File) {
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File too large. Max 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('File too large. Max 8MB limit for demo.');
       return;
     }
     this.selectedFile.set(file);
@@ -86,15 +73,34 @@ export class DeepfakeScannerComponent {
 
     const reader = new FileReader();
     reader.onload = () => {
+        // Extract pure Base64 (remove data:audio/mp3;base64, prefix)
         const base64String = (reader.result as string).split(',')[1];
         this.base64Audio.set(base64String);
     };
     reader.readAsDataURL(file);
   }
 
+  validateKeys() {
+      let valid = true;
+      if (!this.apiKey().startsWith('sk_test_')) {
+          this.apiKeyError.set('Invalid format (must start with sk_test_)');
+          valid = false;
+      } else {
+          this.apiKeyError.set('');
+      }
+
+      if (!this.googleKey()) {
+          this.googleKeyError.set('Required for AI analysis');
+          valid = false;
+      } else {
+          this.googleKeyError.set('');
+      }
+      return valid;
+  }
+
   analyze() {
-    this.validateApiKey(this.apiKey());
-    if (this.apiKeyError() || !this.base64Audio()) return;
+    if (!this.validateKeys()) return;
+    if (!this.base64Audio()) return;
 
     this.scanStage.set('PROCESSING');
     this.result.set(null);
@@ -106,8 +112,8 @@ export class DeepfakeScannerComponent {
       audioBase64: this.base64Audio()
     };
 
-    // CALLING REAL API SERVICE (Gemini)
-    this.apiService.analyzeVoice(this.apiKey(), payload)
+    // Pass BOTH keys: Client Auth + Google Backend Auth
+    this.apiService.analyzeVoice(this.googleKey(), payload)
         .pipe(
             finalize(() => {
                if (!this.errorMessage()) {
@@ -129,7 +135,7 @@ export class DeepfakeScannerComponent {
   }
 
   get formattedJson() {
-    if (!this.result()) return '';
+    if (!this.result()) return '// Ready to receive data...';
     return JSON.stringify(this.result(), null, 2);
   }
 }

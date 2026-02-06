@@ -10,27 +10,38 @@
                 </div>
                 
                 <p class="text-sm text-slate-400 mb-6 font-light">
-                    Analyze spectral artifacts to detect AI-synthesized speech. 
-                    Supports <span class="text-cyan-400">Multi-Lingual</span> detection.
+                    Forensic audio spectrum analysis for deepfake artifacts. 
+                    <br><span class="text-xs text-gray-500">Problem Statement 1 (Multi-Lingual)</span>
                 </p>
 
                 <!-- Configuration Form -->
                 <div class="space-y-4">
-                    <!-- API Key -->
+                    
+                    <!-- CLIENT API KEY (Problem Statement Req) -->
                     <div>
-                        <label class="block text-[10px] font-mono text-gray-500 mb-1">API ACCESS KEY (HEADER: x-api-key)</label>
-                        <input type="password" 
+                        <label class="block text-[10px] font-mono text-gray-500 mb-1">CLIENT AUTH KEY (x-api-key)</label>
+                        <input type="text" 
                                [value]="apiKey()" 
-                               (input)="validateApiKey($any($event.target).value)"
+                               (input)="apiKey.set($any($event.target).value)"
                                [class.border-red-500]="apiKeyError()"
-                               [class.focus:border-red-500]="apiKeyError()"
-                               class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-sm text-cyan-400 font-mono focus:border-cyan-500 focus:outline-none transition-colors" />
-                        
-                        @if (apiKeyError()) {
-                            <div class="text-red-400 text-[10px] mt-1 font-mono flex items-center gap-1">
-                                <span>⚠</span> {{ apiKeyError() }}
-                            </div>
-                        }
+                               class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-sm text-cyan-400 font-mono focus:border-cyan-500 focus:outline-none transition-colors"
+                               placeholder="sk_test_..." />
+                        @if (apiKeyError()) { <div class="text-red-400 text-[10px] mt-1">{{ apiKeyError() }}</div> }
+                    </div>
+
+                    <!-- GOOGLE API KEY (Functional Req) -->
+                    <div>
+                        <label class="block text-[10px] font-mono text-yellow-500 mb-1 flex justify-between">
+                            <span>GOOGLE GEMINI API KEY</span>
+                            <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline hover:text-white">GET KEY</a>
+                        </label>
+                        <input type="password" 
+                               [value]="googleKey()" 
+                               (input)="googleKey.set($any($event.target).value)"
+                               [class.border-red-500]="googleKeyError()"
+                               class="w-full bg-black/40 border border-yellow-500/30 rounded px-4 py-2 text-sm text-yellow-300 font-mono focus:border-yellow-500 focus:outline-none transition-colors"
+                               placeholder="Paste your AI Studio Key here..." />
+                        @if (googleKeyError()) { <div class="text-red-400 text-[10px] mt-1">{{ googleKeyError() }}</div> }
                     </div>
 
                     <!-- Language Selector -->
@@ -70,18 +81,18 @@
                             </svg>
                         </div>
                         <div>
-                            <p class="text-cyan-100 font-bold">Click to Upload MP3</p>
-                            <p class="text-xs text-gray-500 mt-1">or drag and drop audio file</p>
+                            <p class="text-cyan-100 font-bold">Upload Audio Sample</p>
+                            <p class="text-xs text-gray-500 mt-1">MP3 format • Max 8MB</p>
                         </div>
                     } @else {
-                        <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                        <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 animate-bounce">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </div>
                         <div>
                             <p class="text-emerald-300 font-bold truncate max-w-[200px]">{{ selectedFile()?.name }}</p>
-                            <p class="text-xs text-gray-500 mt-1">{{ (selectedFile()?.size || 0) / 1024 / 1024 | number:'1.2-2' }} MB • Base64 Ready</p>
+                            <p class="text-xs text-gray-500 mt-1">{{ (selectedFile()?.size || 0) / 1024 / 1024 | number:'1.2-2' }} MB • Ready</p>
                         </div>
                     }
                  </div>
@@ -89,15 +100,15 @@
 
             <!-- Analyze Action -->
             <button (click)="analyze()" 
-                    [disabled]="!selectedFile() || scanStage() === 'PROCESSING' || !!apiKeyError()"
+                    [disabled]="!selectedFile() || scanStage() === 'PROCESSING'"
                     class="w-full py-4 rounded bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-cyber font-bold tracking-widest text-white shadow-lg shadow-cyan-500/20 transition-all relative overflow-hidden">
                 @if (scanStage() === 'PROCESSING') {
                     <div class="flex items-center justify-center gap-2">
                         <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                        <span>UPLOADING & ANALYZING...</span>
+                        <span>ANALYZING...</span>
                     </div>
                 } @else {
-                    INITIALIZE SCAN
+                    INITIALIZE FORENSIC SCAN
                 }
             </button>
             
@@ -118,7 +129,7 @@
                      [class.border-emerald-500]="res.classification === 'HUMAN'">
                     
                     <div class="flex justify-between items-center mb-4">
-                        <div class="text-xs font-mono text-gray-500">SCAN RESULT ID: {{ 1000 + (res.processingTimeMs || 0) }}</div>
+                        <div class="text-xs font-mono text-gray-500">REQ ID: {{ 1000 + (res.processingTimeMs || 0) }}</div>
                         <div class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10">{{ res.processingTimeMs }}ms</div>
                     </div>
 
@@ -130,7 +141,7 @@
                             {{ res.classification?.replace('_', ' ') }}
                         </div>
                         <div class="text-sm font-mono text-gray-400">
-                            CONFIDENCE SCORE: <span class="text-white">{{ res.confidenceScore | percent:'1.1-2' }}</span>
+                            CONFIDENCE: <span class="text-white">{{ res.confidenceScore | percent:'1.1-2' }}</span>
                         </div>
                     </div>
 
@@ -155,7 +166,7 @@
                      <!-- Placeholder -->
                     <div class="glass-panel p-6 rounded-xl border border-white/5 h-[240px] flex flex-col items-center justify-center text-gray-600 border-dashed">
                         <div class="text-4xl mb-4 opacity-20">📡</div>
-                        <p class="text-sm font-mono">AWAITING TELEMETRY...</p>
+                        <p class="text-sm font-mono">AWAITING INPUT...</p>
                     </div>
                 }
             }
@@ -163,7 +174,7 @@
             <!-- JSON Response Terminal -->
             <div class="glass-panel rounded-xl overflow-hidden border border-white/5 flex flex-col h-[300px]">
                 <div class="bg-black/40 px-4 py-2 border-b border-white/5 flex justify-between items-center">
-                    <span class="text-[10px] font-mono text-gray-400">API RESPONSE (JSON)</span>
+                    <span class="text-[10px] font-mono text-gray-400">API RESPONSE</span>
                     <div class="flex gap-1.5">
                         <div class="w-2 h-2 rounded-full bg-red-500/20"></div>
                         <div class="w-2 h-2 rounded-full bg-yellow-500/20"></div>
@@ -171,11 +182,7 @@
                     </div>
                 </div>
                 <div class="p-4 bg-[#0a0a0a] flex-1 overflow-auto font-mono text-xs">
-                    @if (result()) {
-                        <pre class="text-gray-300 leading-relaxed">{{ formattedJson }}</pre>
-                    } @else {
-                        <div class="text-gray-700 italic">// Waiting for request...</div>
-                    }
+                    <pre class="text-gray-300 leading-relaxed">{{ formattedJson }}</pre>
                 </div>
             </div>
 
