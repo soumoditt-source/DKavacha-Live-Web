@@ -72,7 +72,7 @@ export class DeepfakeApiService {
       ### 🔬 FORENSIC PROTOCOL (ULTIMATE SPOOF PROOF):
       1. **Advanced MFCC Spectrography & Vocal Tract Resonance**:
          - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. Look for **over-smoothed delta/delta-delta coefficients** that lack natural inertia, contrasting with the erratic, organic variance of human speech.
-         - **Vocal Tract**: Identify natural formants (F1, F2, F3, F4). Human voices exhibit rich harmonic resonance due to physical tissue constraints. AI-generated speech often lacks this depth.
+         - **Vocal Tract**: Identify natural formants (F1, F2, F3, F4). Human voices exhibit rich harmonic resonance due to physical tissue constraints (mucosal wave irregularities). AI-generated speech often lacks this depth.
 
       2. **Frequency Domain (Hz) Precision & Micro-Tremors**:
          - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz for **Sub-Perceptual Jitter** (>0.5% variance) and organic **micro-tremors**. AI generation is often pitch-perfect, lacking these biological imperfections.

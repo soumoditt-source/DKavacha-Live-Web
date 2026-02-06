@@ -13,11 +13,12 @@ export class AudioService {
   private mediaStream: MediaStream | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
   
-  // --- VOCAL ISOLATION CHAIN (NOISE REDUCTION) ---
-  private highPassFilter: BiquadFilterNode | null = null;
-  private lowPassFilter: BiquadFilterNode | null = null;
-  private vocalPeakingFilter: BiquadFilterNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
+  // --- VOCAL ISOLATION & SPECTRAL GATING CHAIN ---
+  // We use a band-pass approach to simulate spectral gating of noise outside vocal range
+  private lowCutFilter: BiquadFilterNode | null = null; // Cuts sub-bass rumble
+  private lowPassFilter: BiquadFilterNode | null = null; // Cuts high hiss
+  private vocalPresenceFilter: BiquadFilterNode | null = null; // Boosts speech intelligibility
+  private spectralGateCompressor: DynamicsCompressorNode | null = null; // Soft-knee noise gate
 
   private recognition: any = null;
   private synthesis: SpeechSynthesis = window.speechSynthesis;
@@ -140,32 +141,39 @@ export class AudioService {
       this.analyser.fftSize = 256;
       this.analyser.smoothingTimeConstant = 0.5;
 
-      this.highPassFilter = this.audioContext.createBiquadFilter();
-      this.highPassFilter.type = 'highpass';
-      this.highPassFilter.frequency.value = 85;
+      // --- SPECTRAL GATING PIPELINE ---
+      // 1. Low Cut (High Pass): Remove sub-bass noise (< 85Hz)
+      this.lowCutFilter = this.audioContext.createBiquadFilter();
+      this.lowCutFilter.type = 'highpass';
+      this.lowCutFilter.frequency.value = 85;
 
+      // 2. High Cut (Low Pass): Remove high-frequency hiss (> 4000Hz)
       this.lowPassFilter = this.audioContext.createBiquadFilter();
       this.lowPassFilter.type = 'lowpass';
-      this.lowPassFilter.frequency.value = 3500; 
+      this.lowPassFilter.frequency.value = 4000; 
 
-      this.vocalPeakingFilter = this.audioContext.createBiquadFilter();
-      this.vocalPeakingFilter.type = 'peaking';
-      this.vocalPeakingFilter.frequency.value = 2500;
-      this.vocalPeakingFilter.Q.value = 1.0;
-      this.vocalPeakingFilter.gain.value = 5.0; 
+      // 3. Vocal Presence: Boost 2-3kHz for intelligibility
+      this.vocalPresenceFilter = this.audioContext.createBiquadFilter();
+      this.vocalPresenceFilter.type = 'peaking';
+      this.vocalPresenceFilter.frequency.value = 2500;
+      this.vocalPresenceFilter.Q.value = 1.0;
+      this.vocalPresenceFilter.gain.value = 4.0; 
 
-      this.compressor = this.audioContext.createDynamicsCompressor();
-      this.compressor.threshold.value = -24;
-      this.compressor.knee.value = 30;
-      this.compressor.ratio.value = 12;
-      this.compressor.attack.value = 0.003;
-      this.compressor.release.value = 0.25;
+      // 4. Spectral Gate / Dynamics Compressor
+      // Acts as a noise gate for quiet sounds and compressor for loud ones
+      this.spectralGateCompressor = this.audioContext.createDynamicsCompressor();
+      this.spectralGateCompressor.threshold.value = -30; // Gate threshold
+      this.spectralGateCompressor.knee.value = 40; // Soft knee for natural transition
+      this.spectralGateCompressor.ratio.value = 12; // High compression for consistency
+      this.spectralGateCompressor.attack.value = 0.003; // Fast attack
+      this.spectralGateCompressor.release.value = 0.25; // Slow release
 
-      this.source.connect(this.highPassFilter);
-      this.highPassFilter.connect(this.lowPassFilter);
-      this.lowPassFilter.connect(this.vocalPeakingFilter);
-      this.vocalPeakingFilter.connect(this.compressor);
-      this.compressor.connect(this.analyser);
+      // Connect Chain: Source -> LowCut -> HighCut -> VocalBoost -> Compressor -> Analyser
+      this.source.connect(this.lowCutFilter);
+      this.lowCutFilter.connect(this.lowPassFilter);
+      this.lowPassFilter.connect(this.vocalPresenceFilter);
+      this.vocalPresenceFilter.connect(this.spectralGateCompressor);
+      this.spectralGateCompressor.connect(this.analyser);
 
       this.isRecording.set(true);
       
