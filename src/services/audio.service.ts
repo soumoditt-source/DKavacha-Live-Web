@@ -130,6 +130,11 @@ export class AudioService {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.audioContext = new AudioContext();
       
+      // Ensure AudioContext is running (crucial for some browsers)
+      if (this.audioContext.state === 'suspended') {
+          await this.audioContext.resume();
+      }
+
       this.source = this.audioContext.createMediaStreamSource(this.mediaStream);
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 256;
@@ -246,6 +251,7 @@ export class AudioService {
       if (!this.voiceEnabled()) return;
       
       if (!this.audioContext) this.audioContext = new AudioContext();
+      // Ensure we resume if suspended
       if (this.audioContext.state === 'suspended') this.audioContext.resume();
 
       const osc = this.audioContext.createOscillator();

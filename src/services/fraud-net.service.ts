@@ -68,6 +68,7 @@ export class FraudNetService {
     
     // 💳 BANKING & FINANCIAL (Expanded per user feedback)
     { word: 'credit card', risk: 0.95, msg: 'Sensitive Financial Request' },
+    { word: 'credit card info', risk: 0.98, msg: 'Sensitive Financial Request' },
     { word: 'debit card', risk: 0.95, msg: 'Sensitive Financial Request' },
     { word: 'banking info', risk: 0.90, msg: 'Banking Data Solicitation' },
     { word: 'expiry date', risk: 0.95, msg: 'Card Expiry Date Request' },
@@ -355,8 +356,8 @@ export class FraudNetService {
     const timeSinceThreat = Date.now() - this.lastThreatTime;
     
     // Decay logic: Only decay if NO threat detected for 5 seconds
-    if (timeSinceThreat > 5000) {
-        probability = probability * 0.95; // Slower decay
+    if (timeSinceThreat > 8000) { // Increased grace period to 8 seconds
+        probability = probability * 0.98; // Slower decay (was 0.95)
     } 
     
     if (probability < 0.05) probability = 0;

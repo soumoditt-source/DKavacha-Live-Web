@@ -230,15 +230,15 @@ export class AppComponent implements OnInit {
     // REQUEST PERMISSIONS ON USER GESTURE (Notification + Audio)
     this.fraudService.requestNotificationPermission();
     
+    // Greet immediately to ensure browser allows audio playback (Autoplay Policy)
+    this.audioService.speak("System Unlocked. Access Granted to Soumoditya Das.", true);
+
     this.isBooting.set(true);
     
     // Simulate BIOS Loading Sequence
     setTimeout(() => {
         this.configService.setApiKey(this.inputKey);
         this.fraudService.loadModel();
-        
-        // Voice Greeting
-        this.audioService.speak("System Unlocked. Access Granted to Soumoditya Das.", true);
         
         this.isBooting.set(false);
     }, 1500);

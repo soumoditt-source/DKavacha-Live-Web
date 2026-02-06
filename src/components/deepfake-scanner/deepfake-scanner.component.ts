@@ -31,7 +31,7 @@ type ScanStage = 'IDLE' | 'UPLOADING' | 'SPECTRAL_ANALYSIS' | 'NEURAL_CLASSIFICA
                 <!-- Configuration Form -->
                 <div class="space-y-4">
                     
-                    <!-- CLIENT API KEY -->
+                    <!-- CLIENT AUTH KEY -->
                     <div>
                         <label class="block text-[10px] font-mono text-gray-500 mb-1">CLIENT AUTH KEY (x-api-key)</label>
                         <input type="text" 
@@ -339,20 +339,20 @@ export class DeepfakeScannerComponent {
             return;
         }
 
-        // --- Dynamic Progress Simulation ---
+        // --- Dynamic Progress Simulation (Staged) ---
         if (stage === 'UPLOADING') {
             // Fast upload sim to 20%
             if (p < 20) p += 2;
             else this.scanStage.set('SPECTRAL_ANALYSIS');
         } 
         else if (stage === 'SPECTRAL_ANALYSIS') {
-            // Detailed scan 20% -> 60%
-            if (p < 60) p += 0.8; 
+            // Detailed scan 20% -> 60% (Medium speed)
+            if (p < 60) p += 1; 
             else this.scanStage.set('NEURAL_CLASSIFICATION');
         }
         else if (stage === 'NEURAL_CLASSIFICATION') {
-            // Waiting for API 60% -> 95% (Slow crawl)
-            if (p < 95) p += 0.2;
+            // AI Processing 60% -> 90% (Slow, realistic wait)
+            if (p < 90) p += 0.5;
         }
 
         this.progress.set(Math.min(99, p));

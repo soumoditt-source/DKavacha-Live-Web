@@ -63,27 +63,24 @@ export class DeepfakeApiService {
   private async callGeminiModel(key: string, req: VoiceAnalysisRequest): Promise<{ classification: 'AI_GENERATED' | 'HUMAN', confidenceScore: number }> {
     const ai = new GoogleGenAI({ apiKey: key });
 
-    // 🕵️ ULTIMATE FORENSIC PROMPT (MFCCs Delta/Delta-Delta + Hz Range)
+    // 🕵️ ULTIMATE FORENSIC PROMPT (Refined for Smoothed Coefficients & Phase)
     const prompt = `
       Act as a Lead Audio Forensic Analyst. Analyze the provided audio sample for signs of Generative AI cloning (RVC, VITS, Tortoise, ElevenLabs, Vall-E).
       
       Target Language: ${req.language === 'Auto-Detect' ? 'Auto-Detect (Analyze phonemes to identify)' : req.language}.
 
-      ### 🔬 FORENSIC PROTOCOL (SPOOF-PROOF STANDARD):
+      ### 🔬 FORENSIC PROTOCOL (ULTIMATE SPOOF PROOF):
       1. **Advanced MFCC Spectrography & Vocal Tract Resonance**:
-         - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. 
-         - **Vocal Tract**: Look for natural formants (F1, F2, F3, F4) corresponding to organic vocal tract shaping. 
-         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ and rich harmonic resonance due to physical tissue constraints (mucosal wave irregularities).
-         - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ, lacking natural inertia.
-      
+         - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. Look for **over-smoothed delta/delta-delta coefficients** that lack natural inertia, contrasting with the erratic, organic variance of human speech.
+         - **Vocal Tract**: Identify natural formants (F1, F2, F3, F4). Human voices exhibit rich harmonic resonance due to physical tissue constraints. AI-generated speech often lacks this depth.
+
       2. **Frequency Domain (Hz) Precision & Micro-Tremors**:
-         - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz. Look for **Sub-Perceptual Jitter** (>0.5% variance) and organic micro-tremors. AI often generates pitch-perfect F0 without these subtle instabilities.
-         - **High-Frequency Artifacts (7kHz-16kHz)**: Scan for "spectral smearing", "metallic ringing", or sudden phase cutoffs (common in HiFi-GAN/DiffWave vocoders).
-      
+         - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz for **Sub-Perceptual Jitter** (>0.5% variance) and organic **micro-tremors**. AI generation is often pitch-perfect, lacking these biological imperfections.
+         - **High-Frequency Artifacts (7kHz-16kHz)**: Scan for **metallic high-frequency artifacts**, "spectral smearing", or sudden phase cutoffs typical of neural vocoders (HiFi-GAN/DiffWave).
+
       3. **Temporal Dynamics & Phase Continuity**:
-         - **Phase Alignment**: Inspect plosive sounds (p, t, k, b, d, g). Human speech shows natural phase dispersion. AI generation often results in phase continuity issues or "smearing" during transient attacks.
+         - **Phase Alignment**: Inspect **plosive sounds** (p, t, k, b, d, g). Specific check: Look for **phase continuity issues** where the transient attack is "smeared" or phase-incoherent.
          - **Zero-Breath Continuity**: Detect unnatural sentence chaining without inhalation pauses.
-         - **Phoneme Artifacts**: Check for "mushed" fricatives (s, f, z) or unnatural silence gating between words.
 
       ### 📝 OUTPUT REQUIREMENT:
       Classify strictly based on artifacts.
