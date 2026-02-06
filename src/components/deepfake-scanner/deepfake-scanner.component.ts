@@ -29,9 +29,9 @@ export class DeepfakeScannerComponent {
   apiService = inject(DeepfakeApiService);
 
   // Configuration Signals
-  apiKey = signal('sk_test_123456789'); // Client Auth Key (Mock)
+  // SECURITY UPDATE: Default key removed. User must provide valid key.
+  apiKey = signal(''); 
   
-  // SECURITY FIX: Key removed. User must enter their own key.
   googleKey = signal(''); 
   
   apiKeyError = signal('');

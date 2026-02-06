@@ -2,7 +2,7 @@
 // Vercel Serverless Function for Problem Statement 1
 // Endpoint: POST /api/voice-detection
 
-const { GoogleGenAI, Type } = require('@google/genai');
+import { GoogleGenAI, Type } from "@google/genai";
 
 export default async function handler(req, res) {
   // 1. CORS Headers
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   // 2. Client Authentication
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || !apiKey.startsWith('sk_test_')) {
-    return res.status(401).json({ error: 'Unauthorized. Invalid x-api-key.' });
+    return res.status(401).json({ error: 'Unauthorized. Invalid x-api-key format.' });
   }
 
   // 3. Google Gemini Authentication
