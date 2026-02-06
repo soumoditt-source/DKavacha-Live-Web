@@ -62,17 +62,17 @@ export default async function handler(req, res) {
       ### 🔬 FORENSIC PROTOCOL (SPOOF-PROOF STANDARD):
       1. **Advanced MFCC Spectrography**:
          - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. 
-         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ due to physical tissue constraints.
-         - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ.
+         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ due to physical tissue constraints (mucosal wave irregularities).
+         - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ, lacking natural inertia.
       
       2. **Frequency Domain (Hz) Precision**:
-         - **Low Band (85Hz-300Hz)**: Check for organic "micro-tremors" in F0. AI often lacks this sub-perceptual jitter.
+         - **Low Band (85Hz-300Hz)**: Check for organic "micro-tremors" in F0 (sub-perceptual jitter > 0.5%). AI often produces flat F0.
          - **High Band (7kHz-16kHz)**: Scan for "spectral smearing" or "metallic ringing" (common in HiFi-GAN/DiffWave vocoders).
          - **Phase Continuity**: Look for unnatural phase alignment in plosive sounds.
       
       3. **Temporal Dynamics**:
-         - **Breath Detection**: Identify "Zero-Breath" continuity.
-         - **Prosody**: Check for unnatural flatness.
+         - **Breath Detection**: Identify "Zero-Breath" continuity in long sentences.
+         - **Prosody**: Check for unnatural flatness or lack of emotional variance.
 
       ### 📝 OUTPUT REQUIREMENT:
       Classify strictly based on artifacts.

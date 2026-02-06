@@ -54,7 +54,7 @@ export class FraudNetService {
   
   prefs = signal<NotificationPreferences>(this.loadPreferences());
 
-  // --- THREAT DICTIONARY 2026 (RESEARCH GATE & CYBER CELL ALIGNED) ---
+  // --- THREAT DICTIONARY 2026 (EXPANDED) ---
   private readonly scamPhrases = [
     // 🚨 AUTHORITY IMPERSONATION (High Severity)
     { word: 'digital arrest', risk: 1.0, msg: 'Digital Arrest Threat (CBI/Police)' },
@@ -81,6 +81,25 @@ export class FraudNetService {
     { word: 'refundable', risk: 0.80, msg: 'Fake Refund Promise' },
     { word: 'deposit money', risk: 0.85, msg: 'Upfront Deposit Request' },
     
+    // 💼 JOB & TASK SCAMS
+    { word: 'prepaid task', risk: 0.95, msg: 'Prepaid Task Scam' },
+    { word: 'daily income', risk: 0.85, msg: 'Fake Job Offer' },
+    { word: 'pay via telegram', risk: 0.95, msg: 'Telegram Payment Fraud' },
+    { word: 'part time job', risk: 0.65, msg: 'Suspicious Job Offer (Verify)' },
+    { word: 'work from home', risk: 0.60, msg: 'Work From Home Trap (Verify)' },
+
+    // 💘 ROMANCE & HONEY TRAPS
+    { word: 'stuck in customs', risk: 0.90, msg: 'Romance Scam: Customs Ploy' },
+    { word: 'visa fee', risk: 0.85, msg: 'Romance Scam: Visa Fraud' },
+    { word: 'hospital bill', risk: 0.80, msg: 'Emergency Money Scam' },
+    { word: 'send money for flight', risk: 0.90, msg: 'Travel Cost Scam' },
+
+    // 📈 INVESTMENT SCAMS
+    { word: 'guaranteed return', risk: 0.95, msg: 'Fake Investment Promise' },
+    { word: 'double your money', risk: 1.0, msg: 'Ponzi Scheme Alert' },
+    { word: 'crypto investment', risk: 0.75, msg: 'Crypto Scam Risk' },
+    { word: 'stock tip', risk: 0.70, msg: 'Pump and Dump Risk' },
+
     // 🔗 LINKS & UPI PHISHING
     { word: 'tap the link', risk: 0.95, msg: 'Malicious Link Bait' },
     { word: 'click the link', risk: 0.95, msg: 'Phishing Link Request' },

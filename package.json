@@ -1,6 +1,6 @@
 {
   "name": "dkavacha-live-web",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
@@ -17,7 +17,7 @@
     "@angular/forms": "^19.0.0",
     "@angular/platform-browser": "^19.0.0",
     "@angular/router": "^19.0.0",
-    "@google/genai": "^0.2.1",
+    "@google/genai": "^0.1.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zone.js": "~0.15.0"

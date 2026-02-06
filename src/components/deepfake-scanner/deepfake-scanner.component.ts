@@ -29,9 +29,10 @@ export class DeepfakeScannerComponent {
   apiService = inject(DeepfakeApiService);
 
   // Configuration Signals
-  apiKey = signal('sk_test_123456789'); // Client Auth Key
-  // PRE-FILLED WITH USER'S KEY FOR INSTANT DEMO SUCCESS
-  googleKey = signal('AIzaSyAmAapopR9s0Q9FPmYhcSzkzcvZE8c9flM'); 
+  apiKey = signal('sk_test_123456789'); // Client Auth Key (Mock)
+  
+  // SECURITY FIX: Key removed. User must enter their own key.
+  googleKey = signal(''); 
   
   apiKeyError = signal('');
   googleKeyError = signal('');
