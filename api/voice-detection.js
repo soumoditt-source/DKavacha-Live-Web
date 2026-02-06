@@ -35,13 +35,19 @@ export default async function handler(req, res) {
   // 4. Robust Input Validation
   const { language, audioBase64 } = req.body;
   
-  // Size Check (Approx < 10MB)
-  if (audioBase64 && audioBase64.length > 14000000) {
+  if (!language || !audioBase64) {
+    return res.status(400).json({ error: 'Payload missing "language" or "audioBase64".' });
+  }
+
+  // Size Check (Strict < 10MB)
+  if (audioBase64.length > 14000000) {
       return res.status(413).json({ error: 'Payload too large. Max 10MB audio.' });
   }
 
-  if (!language || !audioBase64) {
-    return res.status(400).json({ error: 'Payload missing "language" or "audioBase64".' });
+  // Format Check (Basic Base64 Regex)
+  const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+  if (!base64Regex.test(audioBase64)) {
+      return res.status(400).json({ error: 'Invalid Audio Data: Malformed Base64.' });
   }
 
   try {
@@ -84,7 +90,14 @@ export default async function handler(req, res) {
       }
     });
 
-    const result = JSON.parse(response.text());
+    // FIX: response.text is a property, not a function
+    const text = response.text;
+    
+    if (!text) {
+        throw new Error('Empty response from AI');
+    }
+
+    const result = JSON.parse(text);
 
     return res.status(200).json({
       classification: result.classification,

@@ -110,7 +110,13 @@ export class DeepfakeApiService {
         }
       });
 
-      const text = response.text();
+      // FIX: response.text is a property, not a function
+      const text = response.text;
+      
+      if (!text) {
+        throw new Error('Empty response received from AI Model');
+      }
+
       const json = JSON.parse(text);
       
       return {

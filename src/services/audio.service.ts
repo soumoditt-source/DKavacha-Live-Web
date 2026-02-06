@@ -39,6 +39,7 @@ export class AudioService {
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
       this.recognition.interimResults = true; 
+      // Default to Indian English, but auto-detects nicely in modern browsers
       this.recognition.lang = 'en-IN'; 
       this.recognition.maxAlternatives = 1;
 
@@ -55,31 +56,38 @@ export class AudioService {
           }
         }
         
+        // Update live stream text (what is currently being spoken)
         this.liveStreamText.set(interimTranscript || newFinalTranscript);
 
+        // Append to full transcript log if there's a final result
         if (newFinalTranscript) {
            this.transcript.update(t => {
              const updated = t + ' ' + newFinalTranscript;
-             return updated.slice(-8000); 
+             // Keep last 10k chars to prevent memory issues but maintain context
+             return updated.slice(-10000).trim(); 
            });
         }
       };
 
       this.recognition.onerror = (event: any) => {
-        console.warn('Speech Recognition Error:', event.error);
-        if (event.error === 'not-allowed') {
-          this.stopRecording();
-          alert('Microphone access denied. Please check browser settings.');
+        // Silent error handling for 'no-speech' to prevent spamming logs
+        if (event.error !== 'no-speech') {
+             console.warn('Speech Recognition Warning:', event.error);
         }
       };
 
       this.recognition.onend = () => {
+        // Robust auto-restart
         if (this.isRecording()) {
           try {
             this.recognition.start();
-          } catch (e) {}
+          } catch (e) {
+             // Ignore if already started
+          }
         }
       };
+    } else {
+        console.error('Web Speech API not supported in this browser.');
     }
   }
 
@@ -124,7 +132,13 @@ export class AudioService {
 
       this.isRecording.set(true);
       
-      if (this.recognition) this.recognition.start();
+      if (this.recognition) {
+          try {
+              this.recognition.start();
+          } catch(e) {
+              console.log('Recognition already active');
+          }
+      }
       
       this.updateFrequencyData();
 
@@ -178,30 +192,21 @@ export class AudioService {
     this.synthesis.speak(utterance);
   }
 
-  /**
-   * 🚨 GENERATE SIREN TONE
-   * Creates a hardware-accelerated alarm sound using Oscillators.
-   * This ensures the alert is heard even if TTS is too slow.
-   */
   playSiren() {
       if (!this.voiceEnabled()) return;
       
-      // Ensure context is running (it might suspend if no user interaction, but we usually have it from recording)
       if (!this.audioContext) this.audioContext = new AudioContext();
       if (this.audioContext.state === 'suspended') this.audioContext.resume();
 
       const osc = this.audioContext.createOscillator();
       const gain = this.audioContext.createGain();
       
-      // Sawtooth wave for "harsh" alarm sound
       osc.type = 'sawtooth';
       
-      // Siren Sweep: 880Hz (A5) -> 440Hz (A4)
       const now = this.audioContext.currentTime;
       osc.frequency.setValueAtTime(880, now); 
       osc.frequency.exponentialRampToValueAtTime(440, now + 0.5); 
       
-      // Volume Envelope
       gain.gain.setValueAtTime(0.3, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
       

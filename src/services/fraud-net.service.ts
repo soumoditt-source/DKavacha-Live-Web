@@ -52,7 +52,6 @@ export class FraudNetService {
   // --- NOTIFICATION & PREFERENCE STATE ---
   activeCriticalAlert = signal<CriticalAlert | null>(null);
   
-  // Default Prefs: All ON for maximum safety
   prefs = signal<NotificationPreferences>(this.loadPreferences());
 
   // --- THREAT DICTIONARY 2026 (ENHANCED BANKING/THEFT) ---
@@ -110,10 +109,17 @@ export class FraudNetService {
     this.requestNotificationPermission();
 
     effect(() => {
-      const stream = this.audioService.liveStreamText().toLowerCase();
-      // Ensure we analyze even short phrases
-      if (stream && stream.length > 3 && this.currentSession()?.status === 'active') {
-        this.analyzeTextContext(stream);
+      // FIX: Use the full transcript history instead of just live stream to catch split phrases
+      const fullHistory = this.audioService.transcript().toLowerCase();
+      const recentContext = fullHistory.slice(-300); // Analyze last 300 chars for context
+      
+      const liveStream = this.audioService.liveStreamText().toLowerCase();
+      
+      // Combine strict live buffer + recent history for maximum hit rate
+      const combinedContext = (recentContext + " " + liveStream).trim();
+
+      if (combinedContext.length > 3 && this.currentSession()?.status === 'active') {
+        this.analyzeTextContext(combinedContext);
       }
     });
 
@@ -293,7 +299,6 @@ export class FraudNetService {
       }
 
       // 3. SYSTEM NOTIFICATIONS (Fallback if Voice is OFF, or critical)
-      // Logic: If sound is OFF, we MUST notify. If Critical, we ALWAYS notify.
       if (!prefs.soundEnabled || type === 'CRITICAL') {
            this.triggerSystemNotification(type, message);
       }
@@ -374,15 +379,24 @@ export class FraudNetService {
       return { probability: 0, confidence: 'LOW', label: 'SAFE', timestamp: Date.now(), threatLevel: 0, detectedKeywords: [], actionRecommendation: 'SECURE' };
   }
 
+  /**
+   * 📳 HAPTIC FEEDBACK ENGINE
+   * Distinct patterns for Warning vs Critical
+   */
   private triggerHaptics(type: 'WARNING' | 'CRITICAL') {
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-          // Distinct patterns for Warning vs Critical
+      if (typeof navigator !== 'undefined' && navigator.vibrate && this.prefs().hapticsEnabled) {
+          
           if (type === 'CRITICAL') {
-              // SOS Pattern: ... --- ...
-              navigator.vibrate([100,50,100,50,100,200,500,200,500,200,100,50,100,50,100]);
+              // SOS Pattern: ... --- ... (Short, Short, Short, Long, Long, Long, Short, Short, Short)
+              // 100ms vibration, 50ms pause
+              navigator.vibrate([
+                  100, 50, 100, 50, 100, 50, // ...
+                  300, 50, 300, 50, 300, 50, // ---
+                  100, 50, 100, 50, 100      // ...
+              ]);
           } else {
-              // Double Tap
-              navigator.vibrate([50, 100, 50]); 
+              // Warning: Double Pulse
+              navigator.vibrate([200, 100, 200]); 
           }
       }
   }

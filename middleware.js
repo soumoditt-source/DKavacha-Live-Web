@@ -4,16 +4,16 @@ export const config = {
   matcher: '/api/voice-detection',
 };
 
-// Simple In-Memory Rate Limiting (Note: State resets on redeploy/cold start)
+// Simple In-Memory Rate Limiting
 const ratelimit = new Map();
 
 export default function middleware(request) {
   const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
   const now = Date.now();
   
-  // Rate Limit: 10 requests per 60 seconds per IP
+  // Rate Limit: 5 requests per 60 seconds per IP (More Aggressive)
   const windowMs = 60 * 1000;
-  const limit = 10;
+  const limit = 5;
   
   const record = ratelimit.get(ip) || { count: 0, start: now };
   
@@ -28,7 +28,7 @@ export default function middleware(request) {
 
   if (record.count > limit) {
       return new NextResponse(
-        JSON.stringify({ error: "Too Many Requests", retryAfter: 60 }),
+        JSON.stringify({ error: "Too Many Requests. Limit: 5 per minute.", retryAfter: 60 }),
         { status: 429, headers: { 'Content-Type': 'application/json' } }
       );
   }
