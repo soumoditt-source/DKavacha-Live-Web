@@ -70,23 +70,25 @@ export class DeepfakeApiService {
       Target Language: ${req.language === 'Auto-Detect' ? 'Auto-Detect (Analyze phonemes to identify)' : req.language}.
 
       ### 🔬 FORENSIC PROTOCOL (SPOOF-PROOF STANDARD):
-      1. **Advanced MFCC Spectrography**:
+      1. **Advanced MFCC Spectrography & Vocal Tract Resonance**:
          - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. 
-         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ due to physical tissue constraints (mucosal wave irregularities).
+         - **Vocal Tract**: Look for natural formants (F1, F2, F3, F4) corresponding to organic vocal tract shaping. 
+         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ and rich harmonic resonance due to physical tissue constraints (mucosal wave irregularities).
          - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ, lacking natural inertia.
       
-      2. **Frequency Domain (Hz) Precision**:
-         - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz. Look for **Sub-Perceptual Jitter** (>0.5% variance). AI often generates pitch-perfect F0.
+      2. **Frequency Domain (Hz) Precision & Micro-Tremors**:
+         - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz. Look for **Sub-Perceptual Jitter** (>0.5% variance) and organic micro-tremors. AI often generates pitch-perfect F0 without these subtle instabilities.
          - **High-Frequency Artifacts (7kHz-16kHz)**: Scan for "spectral smearing", "metallic ringing", or sudden phase cutoffs (common in HiFi-GAN/DiffWave vocoders).
       
-      3. **Temporal Dynamics**:
+      3. **Temporal Dynamics & Phase Continuity**:
+         - **Phase Alignment**: Inspect plosive sounds (p, t, k, b, d, g). Human speech shows natural phase dispersion. AI generation often results in phase continuity issues or "smearing" during transient attacks.
          - **Zero-Breath Continuity**: Detect unnatural sentence chaining without inhalation pauses.
          - **Phoneme Artifacts**: Check for "mushed" fricatives (s, f, z) or unnatural silence gating between words.
 
       ### 📝 OUTPUT REQUIREMENT:
       Classify strictly based on artifacts.
-      - Return **AI_GENERATED** if smooth Δ/ΔΔ, metallic high-freqs, or lack of micro-tremors are found.
-      - Return **HUMAN** if natural breath, organic jitter/shimmer, and full-spectrum resonance are present.
+      - Return **AI_GENERATED** if smooth Δ/ΔΔ, metallic high-freqs, phase discontinuities in plosives, or lack of micro-tremors are found.
+      - Return **HUMAN** if natural breath, organic jitter, valid phase alignment, and full-spectrum resonance are present.
 
       Return JSON ONLY. No markdown. No explanation text outside JSON.
       {
@@ -124,7 +126,7 @@ export class DeepfakeApiService {
         }
       });
 
-      // ACCESS AS PROPERTY (New SDK Standard)
+      // ACCESS AS PROPERTY
       const text = response.text;
       
       if (!text) {
@@ -150,7 +152,6 @@ export class DeepfakeApiService {
       }
 
     } catch (e: any) {
-      // Differentiate between network/API errors and parsing errors
       const msg = e.message || 'Unknown Error';
       if (msg.includes('403') || msg.includes('KEY')) {
          throw new Error('Invalid API Key or Permission Denied.');

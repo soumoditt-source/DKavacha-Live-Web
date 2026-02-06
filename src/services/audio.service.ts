@@ -21,6 +21,7 @@ export class AudioService {
 
   private recognition: any = null;
   private synthesis: SpeechSynthesis = window.speechSynthesis;
+  private voices: SpeechSynthesisVoice[] = [];
   
   // Signals
   isRecording = signal(false);
@@ -28,19 +29,47 @@ export class AudioService {
   transcript = signal<string>('');
   liveStreamText = signal<string>(''); 
   voiceEnabled = signal(true); 
+  currentLang = signal<string>('en-IN');
 
   constructor() {
     this.initSpeechRecognition();
+    this.initVoices();
+  }
+
+  private initVoices() {
+      // Async voice loading
+      const load = () => {
+          this.voices = this.synthesis.getVoices();
+      };
+      
+      load();
+      if (this.synthesis.onvoiceschanged !== undefined) {
+          this.synthesis.onvoiceschanged = load;
+      }
+  }
+
+  // Allow dynamic language switching for better accuracy
+  setLanguage(lang: string) {
+      this.currentLang.set(lang);
+      if (this.recognition) {
+          this.recognition.lang = lang;
+          // Restart if currently recording to apply change
+          if (this.isRecording()) {
+              this.recognition.stop(); 
+              // onend will handle restart
+          }
+      }
   }
 
   private initSpeechRecognition() {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true; 
-      // Default to Indian English, but auto-detects nicely in modern browsers
-      this.recognition.lang = 'en-IN'; 
+      
+      // Robust Configuration
+      this.recognition.continuous = true; // Keep listening
+      this.recognition.interimResults = true; // Real-time feedback
+      this.recognition.lang = this.currentLang(); 
       this.recognition.maxAlternatives = 1;
 
       this.recognition.onresult = (event: any) => {
@@ -63,8 +92,8 @@ export class AudioService {
         if (newFinalTranscript) {
            this.transcript.update(t => {
              const updated = t + ' ' + newFinalTranscript;
-             // Keep last 10k chars to prevent memory issues but maintain context
-             return updated.slice(-10000).trim(); 
+             // Keep last 5k chars (Reduced from 10k for performance)
+             return updated.slice(-5000).trim(); 
            });
         }
       };
@@ -77,10 +106,13 @@ export class AudioService {
       };
 
       this.recognition.onend = () => {
-        // Robust auto-restart
+        // Robust auto-restart (Always-On Sentinel Mode)
         if (this.isRecording()) {
           try {
-            this.recognition.start();
+            // Tiny delay to prevent CPU thrashing on rapid close/open loops
+            setTimeout(() => {
+                if (this.isRecording()) this.recognition.start();
+            }, 100);
           } catch (e) {
              // Ignore if already started
           }
@@ -141,6 +173,9 @@ export class AudioService {
       }
       
       this.updateFrequencyData();
+      
+      // Greet user on connection
+      this.speak("Sentinel Uplink Established. Voice Monitoring Active.", true);
 
     } catch (error) {
       console.error('Error accessing microphone:', error);
@@ -150,6 +185,7 @@ export class AudioService {
 
   stopRecording() {
     this.isRecording.set(false);
+    this.speak("Uplink Terminated.", true);
     
     if (this.mediaStream) {
       this.mediaStream.getTracks().forEach(track => track.stop());
@@ -169,11 +205,18 @@ export class AudioService {
   private updateFrequencyData() {
     if (!this.isRecording() || !this.analyser) return;
 
-    const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-    this.analyser.getByteFrequencyData(dataArray);
-    this.frequencyData.set(dataArray);
-
-    requestAnimationFrame(() => this.updateFrequencyData());
+    // Performance Fix: Throttle update rate to ~24fps (40ms) instead of 60fps
+    // This frees up main thread for voice processing and UI responsiveness
+    setTimeout(() => {
+        if (!this.isRecording() || !this.analyser) return;
+        
+        const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+        this.analyser.getByteFrequencyData(dataArray);
+        this.frequencyData.set(dataArray);
+        
+        // Use requestAnimationFrame only for the scheduling, but inside the timeout
+        requestAnimationFrame(() => this.updateFrequencyData());
+    }, 40);
   }
 
   speak(text: string, force = false) {
@@ -185,8 +228,15 @@ export class AudioService {
     utterance.rate = 1.1;
     utterance.pitch = 1.0;
     
-    const voices = this.synthesis.getVoices();
-    const preferredVoice = voices.find(v => v.name.includes('Google') || v.name.includes('Female'));
+    // Attempt to pick a good voice
+    if (this.voices.length === 0) {
+        this.voices = this.synthesis.getVoices();
+    }
+
+    const preferredVoice = this.voices.find(v => v.name.includes('Google') && v.name.includes('Female')) 
+                        || this.voices.find(v => v.name.includes('Female')) 
+                        || this.voices[0];
+                        
     if (preferredVoice) utterance.voice = preferredVoice;
 
     this.synthesis.speak(utterance);

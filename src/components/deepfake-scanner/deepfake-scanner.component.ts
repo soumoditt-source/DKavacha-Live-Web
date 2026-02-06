@@ -1,7 +1,8 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, effect, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DeepfakeApiService, VoiceAnalysisRequest, VoiceAnalysisResponse, SupportedLanguage } from '../../services/deepfake-api.service';
+import { ConfigService } from '../../services/config.service';
 import { finalize } from 'rxjs/operators';
 
 type ScanStage = 'IDLE' | 'UPLOADING' | 'SPECTRAL_ANALYSIS' | 'NEURAL_CLASSIFICATION' | 'COMPLETE' | 'ERROR';
@@ -10,7 +11,223 @@ type ScanStage = 'IDLE' | 'UPLOADING' | 'SPECTRAL_ANALYSIS' | 'NEURAL_CLASSIFICA
   selector: 'app-deepfake-scanner',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  templateUrl: './deepfake-scanner.component.html',
+  template: `
+<div class="max-w-6xl mx-auto px-4 mt-8 pb-12">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Left Panel: Input & Config -->
+        <div class="space-y-6">
+            <div class="glass-panel p-6 rounded-xl border-l-4 border-cyan-500">
+                <div class="flex items-center gap-2 mb-6">
+                    <span class="text-2xl">🧬</span>
+                    <h2 class="font-cyber text-2xl text-cyan-100">AI VOICE HUNTER</h2>
+                </div>
+                
+                <p class="text-sm text-slate-400 mb-6 font-light">
+                    Detect <strong>Voice Cloning</strong> and synthetic speech patterns.
+                    <br><span class="text-xs text-gray-500">Supports 10 Indian Languages</span>
+                </p>
+
+                <!-- Configuration Form -->
+                <div class="space-y-4">
+                    
+                    <!-- CLIENT API KEY -->
+                    <div>
+                        <label class="block text-[10px] font-mono text-gray-500 mb-1">CLIENT AUTH KEY (x-api-key)</label>
+                        <input type="text" 
+                               [value]="apiKey()" 
+                               (input)="apiKey.set($any($event.target).value)"
+                               [class.border-red-500]="apiKeyError()"
+                               class="w-full bg-black/40 border border-white/10 rounded px-4 py-2 text-sm text-cyan-400 font-mono focus:border-cyan-500 focus:outline-none transition-colors"
+                               placeholder="sk_test_..." />
+                        @if (apiKeyError()) { <div class="text-red-400 text-[10px] mt-1">{{ apiKeyError() }}</div> }
+                    </div>
+
+                    <!-- GOOGLE API KEY (STATUS ONLY) -->
+                    <div>
+                        <label class="block text-[10px] font-mono text-gray-500 mb-1">AI ENGINE LINK</label>
+                        <div class="flex items-center justify-between p-3 rounded border border-white/10 bg-black/40">
+                            <span class="text-xs font-mono text-gray-400">GEMINI-2.5-FLASH</span>
+                            @if (googleKey()) {
+                                <span class="text-[10px] font-bold text-green-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                    SECURE LINK ESTABLISHED
+                                </span>
+                            } @else {
+                                <span class="text-[10px] font-bold text-red-400 flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                                    OFFLINE (LOCKED)
+                                </span>
+                            }
+                        </div>
+                        @if (!googleKey()) {
+                            <p class="text-[9px] text-red-400 mt-1 font-mono">⚠️ System Locked. Please unlock via BIOS screen in main menu.</p>
+                        }
+                    </div>
+
+                    <!-- Language Selector -->
+                    <div>
+                        <label class="block text-[10px] font-mono text-gray-500 mb-1">TARGET LANGUAGE</label>
+                        <div class="flex flex-wrap gap-2">
+                            @for (lang of languages; track lang) {
+                                <button (click)="selectedLang.set($any(lang))"
+                                        class="px-3 py-1.5 rounded text-xs font-mono border transition-all duration-200"
+                                        [class.bg-cyan-900_40]="selectedLang() === lang"
+                                        [class.border-cyan-500]="selectedLang() === lang"
+                                        [class.text-cyan-300]="selectedLang() === lang"
+                                        [class.bg-transparent]="selectedLang() !== lang"
+                                        [class.border-white_10]="selectedLang() !== lang"
+                                        [class.text-gray-400]="selectedLang() !== lang">
+                                    {{ lang }}
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Zone -->
+            <div class="glass-panel p-8 rounded-xl drag-zone relative group cursor-pointer hover:bg-white/5 transition-colors"
+                 (drop)="onDrop($event)" 
+                 (dragover)="onDragOver($event)"
+                 (click)="fileInput.click()">
+                 
+                 <input #fileInput type="file" accept="audio/*" class="hidden" (change)="onFileSelected($event)">
+                 
+                 <div class="flex flex-col items-center justify-center text-center space-y-3">
+                    @if (!selectedFile()) {
+                        <div class="w-12 h-12 rounded-full bg-cyan-500/10 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-cyan-100 font-bold">Upload Audio Sample</p>
+                            <p class="text-xs text-gray-500 mt-1">MP3 format • Max 8MB</p>
+                        </div>
+                    } @else {
+                        <div class="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400 animate-bounce">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-emerald-300 font-bold truncate max-w-[200px]">{{ selectedFile()?.name }}</p>
+                            <p class="text-xs text-gray-500 mt-1">{{ (selectedFile()?.size || 0) / 1024 / 1024 | number:'1.2-2' }} MB • Ready</p>
+                        </div>
+                    }
+                 </div>
+            </div>
+
+            <!-- Analyze Action -->
+            <button (click)="analyze()" 
+                    [disabled]="!selectedFile() || scanStage() !== 'IDLE' && scanStage() !== 'COMPLETE' && scanStage() !== 'ERROR'"
+                    class="w-full py-4 rounded bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-cyber font-bold tracking-widest text-white shadow-lg shadow-cyan-500/20 transition-all relative overflow-hidden">
+                @if (scanStage() !== 'IDLE' && scanStage() !== 'COMPLETE' && scanStage() !== 'ERROR') {
+                    <div class="flex items-center justify-center gap-2">
+                        <span class="animate-pulse">{{ scanStage().replace('_', ' ') }}...</span>
+                    </div>
+                } @else {
+                    INITIALIZE FORENSIC SCAN
+                }
+            </button>
+            
+            @if (errorMessage()) {
+                <div class="p-3 bg-red-900/30 border border-red-500/50 rounded text-red-300 text-xs font-mono">
+                    ERROR: {{ errorMessage() }}
+                </div>
+            }
+        </div>
+
+        <!-- Right Panel: Results & JSON -->
+        <div class="space-y-6">
+            
+            <!-- RESULT CARD -->
+            @if (result(); as res) {
+                <div class="glass-panel p-6 rounded-xl border border-white/10 animate-in fade-in zoom-in duration-300" 
+                     [class.border-red-500]="res.classification === 'AI_GENERATED'"
+                     [class.border-emerald-500]="res.classification === 'HUMAN'">
+                    
+                    <div class="flex justify-between items-center mb-4">
+                        <div class="text-xs font-mono text-gray-500">REQ ID: {{ 1000 + (res.processingTimeMs || 0) }}</div>
+                        <div class="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10">{{ res.processingTimeMs }}ms</div>
+                    </div>
+
+                    <div class="text-center py-6">
+                        <div class="text-5xl md:text-6xl font-black font-cyber tracking-tight mb-2"
+                             [class.text-red-500]="res.classification === 'AI_GENERATED'"
+                             [class.text-emerald-400]="res.classification === 'HUMAN'"
+                             [class.neon-text-red]="res.classification === 'AI_GENERATED'">
+                            {{ res.classification?.replace('_', ' ') }}
+                        </div>
+                        <div class="text-sm font-mono text-gray-400">
+                            CONFIDENCE: <span class="text-white">{{ res.confidenceScore | percent:'1.1-2' }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Confidence Bar -->
+                    <div class="h-2 w-full bg-gray-800 rounded-full overflow-hidden mt-4">
+                        <div class="h-full transition-all duration-1000 ease-out"
+                             [style.width.%]="(res.confidenceScore || 0) * 100"
+                             [class.bg-red-500]="res.classification === 'AI_GENERATED'"
+                             [class.bg-emerald-500]="res.classification === 'HUMAN'">
+                        </div>
+                    </div>
+                </div>
+            } @else {
+                
+                @if (scanStage() !== 'IDLE' && scanStage() !== 'ERROR') {
+                     <!-- 🧬 ADVANCED VISUAL SCANNER -->
+                     <div class="glass-panel p-6 rounded-xl border border-cyan-500/50 h-[300px] flex flex-col items-center justify-center space-y-6 relative overflow-hidden">
+                         
+                         <!-- Grid Background -->
+                         <div class="absolute inset-0 grid grid-cols-6 grid-rows-6 opacity-20 pointer-events-none">
+                             <div class="border border-cyan-500/30" *ngFor="let i of [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36]"></div>
+                         </div>
+
+                         <!-- Scanning Line -->
+                         <div class="absolute top-0 left-0 w-full h-1 bg-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.8)] scanner-line"></div>
+
+                         <!-- Dynamic Status Text -->
+                         <div class="z-10 text-center relative">
+                             <h3 class="font-cyber text-2xl text-cyan-400 animate-pulse">{{ scanStage().replace('_', ' ') }}</h3>
+                             <div class="w-64 h-2 bg-gray-800 rounded-full mt-4 overflow-hidden mx-auto border border-white/10">
+                                <div class="h-full bg-cyan-500 transition-all duration-100 ease-linear shadow-[0_0_10px_rgba(6,182,212,0.8)]"
+                                     [style.width.%]="progress()"></div>
+                             </div>
+                             <p class="text-xs font-mono text-cyan-200 mt-2">
+                                 PROCESS: {{ progress() | number:'1.0-0' }}%
+                             </p>
+                         </div>
+                     </div>
+                } @else {
+                     <!-- Placeholder -->
+                    <div class="glass-panel p-6 rounded-xl border border-white/5 h-[300px] flex flex-col items-center justify-center text-gray-600 border-dashed">
+                        <div class="text-4xl mb-4 opacity-20">📡</div>
+                        <p class="text-sm font-mono">AWAITING INPUT...</p>
+                    </div>
+                }
+            }
+
+            <!-- JSON Response Terminal -->
+            <div class="glass-panel rounded-xl overflow-hidden border border-white/5 flex flex-col h-[300px]">
+                <div class="bg-black/40 px-4 py-2 border-b border-white/5 flex justify-between items-center">
+                    <span class="text-[10px] font-mono text-gray-400">API RESPONSE</span>
+                    <div class="flex gap-1.5">
+                        <div class="w-2 h-2 rounded-full bg-red-500/20"></div>
+                        <div class="w-2 h-2 rounded-full bg-yellow-500/20"></div>
+                        <div class="w-2 h-2 rounded-full bg-green-500/20"></div>
+                    </div>
+                </div>
+                <div class="p-4 bg-[#0a0a0a] flex-1 overflow-auto font-mono text-xs">
+                    <pre class="text-gray-300 leading-relaxed">{{ formattedJson }}</pre>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+  `,
   styles: [`
     .drag-zone {
         background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%23334155FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
@@ -27,15 +244,15 @@ type ScanStage = 'IDLE' | 'UPLOADING' | 'SPECTRAL_ANALYSIS' | 'NEURAL_CLASSIFICA
 })
 export class DeepfakeScannerComponent {
   apiService = inject(DeepfakeApiService);
+  configService = inject(ConfigService);
 
-  // Configuration Signals
-  // SECURITY UPDATE: Default key removed. User must provide valid key.
+  // Configuration Signals - SECURE BY DEFAULT
   apiKey = signal(''); 
   
-  googleKey = signal(''); 
+  // Directly read from ConfigService (Read-Only)
+  googleKey = this.configService.apiKey;
   
   apiKeyError = signal('');
-  googleKeyError = signal('');
   
   selectedLang = signal<SupportedLanguage>('Auto-Detect');
   selectedFile = signal<File | null>(null);
@@ -77,10 +294,10 @@ export class DeepfakeScannerComponent {
     this.selectedFile.set(file);
     this.result.set(null); 
     this.scanStage.set('IDLE');
+    this.progress.set(0);
 
     const reader = new FileReader();
     reader.onload = () => {
-        // Extract pure Base64
         const base64String = (reader.result as string).split(',')[1];
         this.base64Audio.set(base64String);
     };
@@ -97,10 +314,8 @@ export class DeepfakeScannerComponent {
       }
 
       if (!this.googleKey()) {
-          this.googleKeyError.set('Required for AI analysis');
+          this.errorMessage.set('System Locked: Google API Key missing. Unlock system via BIOS.');
           valid = false;
-      } else {
-          this.googleKeyError.set('');
       }
       return valid;
   }
@@ -109,21 +324,39 @@ export class DeepfakeScannerComponent {
     if (!this.validateKeys()) return;
     if (!this.base64Audio()) return;
 
-    // Start Simulation of stages
     this.scanStage.set('UPLOADING');
-    this.progress.set(10);
+    this.progress.set(0);
     this.result.set(null);
     this.errorMessage.set('');
 
-    setTimeout(() => {
-        this.scanStage.set('SPECTRAL_ANALYSIS');
-        this.progress.set(40);
-    }, 800);
+    let p = 0;
+    const updateInterval = setInterval(() => {
+        const stage = this.scanStage();
+        
+        if (stage === 'ERROR' || stage === 'COMPLETE') {
+            clearInterval(updateInterval);
+            if (stage === 'COMPLETE') this.progress.set(100);
+            return;
+        }
 
-    setTimeout(() => {
-        this.scanStage.set('NEURAL_CLASSIFICATION');
-        this.progress.set(70);
-    }, 2000);
+        // --- Dynamic Progress Simulation ---
+        if (stage === 'UPLOADING') {
+            // Fast upload sim to 20%
+            if (p < 20) p += 2;
+            else this.scanStage.set('SPECTRAL_ANALYSIS');
+        } 
+        else if (stage === 'SPECTRAL_ANALYSIS') {
+            // Detailed scan 20% -> 60%
+            if (p < 60) p += 0.8; 
+            else this.scanStage.set('NEURAL_CLASSIFICATION');
+        }
+        else if (stage === 'NEURAL_CLASSIFICATION') {
+            // Waiting for API 60% -> 95% (Slow crawl)
+            if (p < 95) p += 0.2;
+        }
+
+        this.progress.set(Math.min(99, p));
+    }, 50);
 
     const payload: VoiceAnalysisRequest = {
       language: this.selectedLang(),
@@ -132,16 +365,8 @@ export class DeepfakeScannerComponent {
     };
 
     this.apiService.analyzeVoice(this.googleKey(), payload)
-        .pipe(
-            finalize(() => {
-               if (this.errorMessage()) {
-                   this.scanStage.set('ERROR');
-               }
-            })
-        )
         .subscribe({
             next: (res) => {
-                this.progress.set(100);
                 this.scanStage.set('COMPLETE');
                 this.result.set(res);
             },
