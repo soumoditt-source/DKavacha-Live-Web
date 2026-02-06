@@ -59,15 +59,16 @@ export default async function handler(req, res) {
       
       Target Language: ${language}.
 
-      ### 🔬 FORENSIC PROTOCOL:
-      1. **MFCC Analysis (Mel-Frequency Cepstral Coefficients)**:
-         - Inspect cepstral coefficients for mathematical smoothness. 
-         - **Real Human**: Contains organic micro-tremors and irregular noise floor in vocal folds.
-         - **AI/Cloned**: Often exhibits over-smoothed spectral envelopes and phase coherence issues.
+      ### 🔬 FORENSIC PROTOCOL (SPOOF-PROOF STANDARD):
+      1. **Advanced MFCC Spectrography**:
+         - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. 
+         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ due to physical tissue constraints.
+         - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ.
       
-      2. **Frequency Domain (Hz) Check**:
-         - **Fundamental Frequency (F0)**: Analyze 85Hz-255Hz range. Look for natural jitter and shimmer.
-         - **High-Frequency Artifacts (>7kHz)**: Look for "metallic" ringing or phase discontinuities.
+      2. **Frequency Domain (Hz) Precision**:
+         - **Low Band (85Hz-300Hz)**: Check for organic "micro-tremors" in F0. AI often lacks this sub-perceptual jitter.
+         - **High Band (7kHz-16kHz)**: Scan for "spectral smearing" or "metallic ringing" (common in HiFi-GAN/DiffWave vocoders).
+         - **Phase Continuity**: Look for unnatural phase alignment in plosive sounds.
       
       3. **Temporal Dynamics**:
          - **Breath Detection**: Identify "Zero-Breath" continuity.

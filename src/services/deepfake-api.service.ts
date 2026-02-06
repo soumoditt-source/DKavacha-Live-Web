@@ -63,30 +63,30 @@ export class DeepfakeApiService {
   private async callGeminiModel(key: string, req: VoiceAnalysisRequest): Promise<{ classification: 'AI_GENERATED' | 'HUMAN', confidenceScore: number }> {
     const ai = new GoogleGenAI({ apiKey: key });
 
-    // 🕵️ ULTIMATE FORENSIC PROMPT (MFCCs + Hz Range)
+    // 🕵️ ULTIMATE FORENSIC PROMPT (MFCCs Delta/Delta-Delta + Hz Range)
     const prompt = `
-      Act as a Lead Audio Forensic Analyst. Analyze the provided audio sample for signs of Generative AI cloning (RVC, VITS, Tortoise, ElevenLabs).
+      Act as a Lead Audio Forensic Analyst. Analyze the provided audio sample for signs of Generative AI cloning (RVC, VITS, Tortoise, ElevenLabs, Vall-E).
       
       Target Language: ${req.language === 'Auto-Detect' ? 'Auto-Detect (Analyze phonemes to identify)' : req.language}.
 
-      ### 🔬 FORENSIC PROTOCOL:
-      1. **MFCC Analysis (Mel-Frequency Cepstral Coefficients)**:
-         - Inspect cepstral coefficients for mathematical smoothness. 
-         - **Real Human**: Contains organic micro-tremors and irregular noise floor in vocal folds.
-         - **AI/Cloned**: Often exhibits over-smoothed spectral envelopes and phase coherence issues.
+      ### 🔬 FORENSIC PROTOCOL (SPOOF-PROOF STANDARD):
+      1. **Advanced MFCC Spectrography**:
+         - **Delta (Δ) & Delta-Delta (ΔΔ)**: Analyze the rate of change (velocity) and acceleration of cepstral coefficients. 
+         - **Human**: Exhibits erratic, organic variance in Δ/ΔΔ due to physical tissue constraints (mucosal wave irregularities).
+         - **AI/Cloned**: Exhibits over-smoothed, mathematically perfect trajectories in Δ/ΔΔ, lacking natural inertia.
       
-      2. **Frequency Domain (Hz) Check**:
-         - **Fundamental Frequency (F0)**: Analyze 85Hz-255Hz range. Look for natural jitter (pitch perturbation) and shimmer (amplitude perturbation).
-         - **High-Frequency Artifacts (>7kHz)**: Look for "metallic" ringing, vocoder buzzing, or sudden spectral cutoffs common in neural vocoders.
+      2. **Frequency Domain (Hz) Precision**:
+         - **Fundamental Frequency (F0)**: Analyze 85Hz-300Hz. Look for **Sub-Perceptual Jitter** (>0.5% variance). AI often generates pitch-perfect F0.
+         - **High-Frequency Artifacts (7kHz-16kHz)**: Scan for "spectral smearing", "metallic ringing", or sudden phase cutoffs (common in HiFi-GAN/DiffWave vocoders).
       
       3. **Temporal Dynamics**:
-         - **Breath Detection**: Identify "Zero-Breath" continuity. AI models often generate long phrases without natural inhalation pauses.
-         - **Prosody**: Check for unnatural flatness or repetitive cadence.
+         - **Zero-Breath Continuity**: Detect unnatural sentence chaining without inhalation pauses.
+         - **Phoneme Artifacts**: Check for "mushed" fricatives (s, f, z) or unnatural silence gating between words.
 
       ### 📝 OUTPUT REQUIREMENT:
       Classify strictly based on artifacts.
-      - Return **AI_GENERATED** if phase issues, metallic artifacts, or lack of micro-tremors are found.
-      - Return **HUMAN** if natural breath, organic jitter, and full-spectrum resonance are present.
+      - Return **AI_GENERATED** if smooth Δ/ΔΔ, metallic high-freqs, or lack of micro-tremors are found.
+      - Return **HUMAN** if natural breath, organic jitter/shimmer, and full-spectrum resonance are present.
 
       Return JSON ONLY. No markdown. No explanation text outside JSON.
       {
