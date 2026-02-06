@@ -5,7 +5,7 @@
 const { GoogleGenAI, Type } = require('@google/genai');
 
 export default async function handler(req, res) {
-  // 1. CORS Headers (Crucial for cross-origin testing)
+  // 1. CORS Headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -20,22 +20,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed. Use POST.' });
   }
 
-  // 2. Client Authentication (Problem Statement Requirement)
+  // 2. Client Authentication
   const apiKey = req.headers['x-api-key'];
   if (!apiKey || !apiKey.startsWith('sk_test_')) {
     return res.status(401).json({ error: 'Unauthorized. Invalid x-api-key.' });
   }
 
   // 3. Google Gemini Authentication
-  // PRIORITY: Header (for your testing) > Environment Variable (for prod)
   const googleKey = req.headers['x-google-backend-key'] || process.env.GEMINI_API_KEY;
-  
   if (!googleKey) {
     return res.status(500).json({ error: 'Server Config Error: Missing Google API Key.' });
   }
 
-  // 4. Input Parsing
+  // 4. Robust Input Validation
   const { language, audioBase64 } = req.body;
+  
+  // Size Check (Approx < 10MB)
+  if (audioBase64 && audioBase64.length > 14000000) {
+      return res.status(413).json({ error: 'Payload too large. Max 10MB audio.' });
+  }
+
   if (!language || !audioBase64) {
     return res.status(400).json({ error: 'Payload missing "language" or "audioBase64".' });
   }
@@ -43,10 +47,17 @@ export default async function handler(req, res) {
   try {
     const ai = new GoogleGenAI({ apiKey: googleKey });
     
-    // Strict JSON Schema for Problem Statement Compliance
+    // Detailed Prompt for all supported languages
     const prompt = `
-      Perform forensic audio analysis to detect Deepfake/AI-Synthesis.
+      Perform forensic audio analysis for Deepfake/Voice Cloning artifacts.
       Language Context: ${language}.
+      Supported Languages: Tamil, English, Hindi, Malayalam, Telugu, Bengali, Gujarati, Marathi, Kannada, Odia.
+
+      Analyze for:
+      - Synthetic prosody (unnatural rhythm)
+      - Metallic spectral artifacts
+      - Zero-breath continuity (AI often forgets to breathe)
+      
       Classify as either "AI_GENERATED" or "HUMAN".
     `;
 

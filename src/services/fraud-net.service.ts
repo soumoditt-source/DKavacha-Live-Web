@@ -65,14 +65,18 @@ export class FraudNetService {
     { word: 'arrest warrant', risk: 0.98, msg: 'Fake Arrest Warrant' },
     
     // 💳 CREDIT CARD / BANKING THEFT (High Precision)
+    { word: 'credit card', risk: 0.99, msg: 'Credit Card Solicitation' }, // ADDED
+    { word: 'debit card', risk: 0.99, msg: 'Debit Card Solicitation' }, // ADDED
+    { word: 'bank account', risk: 0.95, msg: 'Bank Account Phishing' }, // ADDED
+    { word: 'give me your', risk: 0.85, msg: 'Suspicious Request Pattern' }, // ADDED
     { word: '16 digit', risk: 0.99, msg: 'Credit Card Number Solicitation' },
     { word: 'card number', risk: 0.95, msg: 'Card Details Requested' },
     { word: 'expiry date', risk: 0.95, msg: 'Card Expiry Requested' },
     { word: 'cvv', risk: 0.99, msg: 'CVV Security Code Request' },
-    { word: 'three digits at the back', risk: 0.99, msg: 'CVV Phishing Pattern' },
+    { word: 'three digits', risk: 0.99, msg: 'CVV Phishing Pattern' },
     { word: 'pin number', risk: 0.99, msg: 'PIN Phishing' },
     { word: 'atm pin', risk: 0.99, msg: 'ATM PIN Request' },
-    { word: 'net banking password', risk: 0.99, msg: 'Net Banking Credential Theft' },
+    { word: 'net banking', risk: 0.99, msg: 'Net Banking Credential Theft' },
     
     // 📱 TELECOM / SIM SWAP
     { word: 'sim card block', risk: 0.95, msg: 'SIM Blocking Threat' },
@@ -90,12 +94,11 @@ export class FraudNetService {
   ];
 
   // --- REGEX PATTERNS FOR DATA THEFT ---
-  // Simple regexes to catch users reading out numbers
   private readonly dataTheftPatterns = [
     { regex: /\b\d{16}\b/, msg: 'Potential Credit Card Number (16 Digits)', risk: 1.0 },
-    { regex: /\b\d{3}\s*$/, msg: 'Potential CVV (Standalone 3 Digits)', risk: 0.8 }, // Context dependent
-    { regex: /\b(cvv|cvc)\s*is\s*\d{3}/i, msg: 'CVV Disclosure', risk: 1.0 },
-    { regex: /\b(otp|code)\s*is\s*\d{4,6}/i, msg: 'OTP Disclosure', risk: 1.0 }
+    { regex: /\b\d{3}\s*$/, msg: 'Potential CVV (Standalone 3 Digits)', risk: 0.9 }, 
+    { regex: /\b(cvv|cvc)\s*(is|number)?\s*\d{3}/i, msg: 'CVV Disclosure', risk: 1.0 },
+    { regex: /\b(otp|code)\s*(is)?\s*\d{4,6}/i, msg: 'OTP Disclosure', risk: 1.0 }
   ];
 
   private analysisInterval: any;
@@ -107,7 +110,8 @@ export class FraudNetService {
 
     effect(() => {
       const stream = this.audioService.liveStreamText().toLowerCase();
-      if (stream && this.currentSession()?.status === 'active') {
+      // Ensure we analyze even short phrases
+      if (stream && stream.length > 3 && this.currentSession()?.status === 'active') {
         this.analyzeTextContext(stream);
       }
     });
@@ -194,10 +198,11 @@ export class FraudNetService {
     let detectedMsg = '';
     let detectedWords: string[] = [];
 
-    // 1. Check Keywords
+    // 1. Check Keywords (Partial Match)
     const foundPhrases = this.scamPhrases.filter(p => text.includes(p.word));
     if (foundPhrases.length > 0) {
-        const bestMatch = foundPhrases.reduce((prev, current) => (prev.risk > current.risk) ? prev : current);
+        // Sort by risk descending
+        const bestMatch = foundPhrases.sort((a,b) => b.risk - a.risk)[0];
         maxRisk = bestMatch.risk;
         detectedMsg = bestMatch.msg;
         detectedWords = foundPhrases.map(p => p.word);
@@ -206,10 +211,10 @@ export class FraudNetService {
     // 2. Check Regex (Data Theft)
     for (const pattern of this.dataTheftPatterns) {
         if (pattern.regex.test(text)) {
-            if (pattern.risk > maxRisk) {
+            if (pattern.risk >= maxRisk) {
                 maxRisk = pattern.risk;
                 detectedMsg = pattern.msg;
-                detectedWords.push('PII_PATTERN_MATCH');
+                detectedWords.push('SENSITIVE_DATA_PATTERN');
             }
         }
     }
@@ -225,10 +230,10 @@ export class FraudNetService {
       else if (newProb > 0.7) action = "HIGH ALERT - VERIFY IDENTITY";
       else if (newProb > 0.5) action = "CAUTION ADVISED";
 
-      // 🚨 Trigger Logic
+      // 🚨 Trigger Logic - Lowered threshold for "Warning" to catch things earlier
       if (newProb > 0.75) {
         this.handleThreatTrigger('CRITICAL', detectedMsg);
-      } else if (newProb > 0.45) {
+      } else if (newProb > 0.4) { // Lowered from 0.45
         this.handleThreatTrigger('WARNING', detectedMsg);
       }
 
@@ -237,7 +242,7 @@ export class FraudNetService {
         probability: newProb,
         detectedKeywords: [...new Set([...current.detectedKeywords, ...detectedWords])].slice(-5), 
         actionRecommendation: action,
-        label: newProb > 0.65 ? 'FRAUD' : 'SAFE',
+        label: newProb > 0.60 ? 'FRAUD' : 'SAFE', // Lowered from 0.65
         confidence: newProb > 0.8 ? 'HIGH' : 'MEDIUM',
         threatLevel: Math.floor(newProb * 100)
       });
@@ -256,18 +261,20 @@ export class FraudNetService {
       }
 
       const now = Date.now();
-      const throttle = type === 'CRITICAL' ? 5000 : 15000; // Faster throttle for Critical
+      // Reduced throttling for faster feedback during demo
+      const throttle = type === 'CRITICAL' ? 3000 : 8000; 
       
       if (prefs.soundEnabled && (now - this.lastVoiceAlertTime > throttle)) {
             // Play Siren for Critical
             if (type === 'CRITICAL') {
                 this.audioService.playSiren();
-                this.reportToCyberCell({ type, message, timestamp: now }); // 📡 API REPORT
+                this.reportToCyberCell({ type, message, timestamp: now });
             }
             
             // TTS Backup
-            const prefix = type === 'CRITICAL' ? 'Critical Threat. ' : 'Warning. ';
-            setTimeout(() => this.audioService.speak(`${prefix}${message}`, type === 'CRITICAL'), 600);
+            const prefix = type === 'CRITICAL' ? 'Critical Alert! ' : 'Warning. ';
+            // Speak immediately
+            this.audioService.speak(`${prefix}${message}`, type === 'CRITICAL');
             
             this.lastVoiceAlertTime = now;
       }
@@ -286,23 +293,16 @@ export class FraudNetService {
       }
   }
 
-  /**
-   * 📡 MOCK API ENDPOINT FOR CYBER CRIME REPORTING
-   * In production, this would POST to https://api.cybercrime.gov.in/v2/report
-   */
   private reportToCyberCell(incident: any) {
       const payload = {
           incidentId: crypto.randomUUID(),
           severity: incident.type,
           description: incident.message,
           timestamp: new Date(incident.timestamp).toISOString(),
-          geo: 'IN-WB-KOL', // From persona location
+          geo: 'IN-WB-KOL',
           deviceFingerprint: navigator.userAgent
       };
-      console.group('📡 [API SIMULATION] SENDING REPORT TO CYBER CRIME PORTAL');
-      console.log('Endpoint: POST https://api.cybercrime.gov.in/v2/report');
-      console.log('Payload:', JSON.stringify(payload, null, 2));
-      console.groupEnd();
+      console.log('📡 [CYBER_CELL_LINK] REPORTING:', payload);
   }
 
   private triggerSystemNotification(type: string, body: string) {
@@ -331,7 +331,7 @@ export class FraudNetService {
     
     if (probability < 0.01) probability = 0;
 
-    const isFraud = probability > 0.65;
+    const isFraud = probability > 0.60; // Consistent with analyzeTextContext
 
     const result: FraudResult = {
       probability: parseFloat(probability.toFixed(3)),

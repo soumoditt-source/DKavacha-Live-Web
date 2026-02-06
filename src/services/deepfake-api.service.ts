@@ -3,8 +3,13 @@ import { Observable, from, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Expanded Language Support (Problem Statement + Upgrades)
+export type SupportedLanguage = 
+  'Tamil' | 'English' | 'Hindi' | 'Malayalam' | 'Telugu' | 
+  'Bengali' | 'Gujarati' | 'Marathi' | 'Kannada' | 'Odia';
+
 export interface VoiceAnalysisRequest {
-  language: 'Tamil' | 'English' | 'Hindi' | 'Malayalam' | 'Telugu';
+  language: SupportedLanguage;
   audioFormat: string;
   audioBase64: string;
 }
@@ -58,15 +63,21 @@ export class DeepfakeApiService {
   private async callGeminiModel(key: string, req: VoiceAnalysisRequest): Promise<{ classification: 'AI_GENERATED' | 'HUMAN', confidenceScore: number }> {
     const ai = new GoogleGenAI({ apiKey: key });
 
+    // Updated Prompt for Voice Cloning Detection
     const prompt = `
-      Forensic Audio Analysis.
-      Detect Deepfake artifacts in the spectral data.
+      Perform advanced forensic audio analysis.
       Language: ${req.language}.
+
+      Tasks:
+      1. Detect artifacts of Voice Cloning (VC) and Text-to-Speech (TTS).
+      2. Analyze spectral continuity, breath patterns, and prosody.
+      3. Look for "metallic" artifacts or unnaturally perfect pitch stability common in AI.
+      4. Classify if the speaker is a Real Human or AI Generated/Cloned.
       
-      Output JSON ONLY:
+      Return JSON ONLY:
       {
         "classification": "AI_GENERATED" | "HUMAN",
-        "confidenceScore": number
+        "confidenceScore": number (0.0 to 1.0)
       }
     `;
 

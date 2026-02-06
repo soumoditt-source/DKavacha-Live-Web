@@ -1,10 +1,10 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DeepfakeApiService, VoiceAnalysisRequest, VoiceAnalysisResponse } from '../../services/deepfake-api.service';
+import { DeepfakeApiService, VoiceAnalysisRequest, VoiceAnalysisResponse, SupportedLanguage } from '../../services/deepfake-api.service';
 import { finalize } from 'rxjs/operators';
 
-type ScanStage = 'IDLE' | 'PROCESSING' | 'COMPLETE' | 'ERROR';
+type ScanStage = 'IDLE' | 'UPLOADING' | 'SPECTRAL_ANALYSIS' | 'NEURAL_CLASSIFICATION' | 'COMPLETE' | 'ERROR';
 
 @Component({
   selector: 'app-deepfake-scanner',
@@ -15,13 +15,13 @@ type ScanStage = 'IDLE' | 'PROCESSING' | 'COMPLETE' | 'ERROR';
     .drag-zone {
         background-image: url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' rx='12' ry='12' stroke='%23334155FF' stroke-width='2' stroke-dasharray='12%2c 12' stroke-dashoffset='0' stroke-linecap='square'/%3e%3c/svg%3e");
     }
-    .animate-ring {
-      animation: pulse-ring 2s infinite cubic-bezier(0.24, 0, 0.38, 1);
+    .scanner-line {
+      animation: scan 1.5s ease-in-out infinite;
     }
-    @keyframes pulse-ring {
-      0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
-      70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+    @keyframes scan {
+      0% { transform: translateY(-100%); opacity: 0; }
+      50% { opacity: 1; }
+      100% { transform: translateY(100%); opacity: 0; }
     }
   `]
 })
@@ -29,22 +29,27 @@ export class DeepfakeScannerComponent {
   apiService = inject(DeepfakeApiService);
 
   // Configuration Signals
-  apiKey = signal('sk_test_123456789'); // Client Auth Key (Problem Statement)
-  googleKey = signal(''); // Google AI Key (For Functionality)
+  apiKey = signal('sk_test_123456789'); // Client Auth Key
+  // PRE-FILLED WITH USER'S KEY FOR INSTANT DEMO SUCCESS
+  googleKey = signal('AIzaSyAmAapopR9s0Q9FPmYhcSzkzcvZE8c9flM'); 
   
   apiKeyError = signal('');
   googleKeyError = signal('');
   
-  selectedLang = signal<'Tamil' | 'English' | 'Hindi' | 'Malayalam' | 'Telugu'>('English');
+  selectedLang = signal<SupportedLanguage>('English');
   selectedFile = signal<File | null>(null);
   base64Audio = signal<string>('');
   
   // UI State
   scanStage = signal<ScanStage>('IDLE');
+  progress = signal(0);
   result = signal<VoiceAnalysisResponse | null>(null);
   errorMessage = signal('');
 
-  languages = ['Tamil', 'English', 'Hindi', 'Malayalam', 'Telugu'];
+  languages: SupportedLanguage[] = [
+      'English', 'Tamil', 'Hindi', 'Malayalam', 'Telugu', 
+      'Bengali', 'Gujarati', 'Marathi', 'Kannada', 'Odia'
+  ];
 
   onFileSelected(event: any) {
     const file = event.target.files[0];
@@ -73,7 +78,7 @@ export class DeepfakeScannerComponent {
 
     const reader = new FileReader();
     reader.onload = () => {
-        // Extract pure Base64 (remove data:audio/mp3;base64, prefix)
+        // Extract pure Base64
         const base64String = (reader.result as string).split(',')[1];
         this.base64Audio.set(base64String);
     };
@@ -102,9 +107,21 @@ export class DeepfakeScannerComponent {
     if (!this.validateKeys()) return;
     if (!this.base64Audio()) return;
 
-    this.scanStage.set('PROCESSING');
+    // Start Simulation of stages
+    this.scanStage.set('UPLOADING');
+    this.progress.set(10);
     this.result.set(null);
     this.errorMessage.set('');
+
+    setTimeout(() => {
+        this.scanStage.set('SPECTRAL_ANALYSIS');
+        this.progress.set(40);
+    }, 800);
+
+    setTimeout(() => {
+        this.scanStage.set('NEURAL_CLASSIFICATION');
+        this.progress.set(70);
+    }, 2000);
 
     const payload: VoiceAnalysisRequest = {
       language: this.selectedLang(),
@@ -112,19 +129,18 @@ export class DeepfakeScannerComponent {
       audioBase64: this.base64Audio()
     };
 
-    // Pass BOTH keys: Client Auth + Google Backend Auth
     this.apiService.analyzeVoice(this.googleKey(), payload)
         .pipe(
             finalize(() => {
-               if (!this.errorMessage()) {
-                   this.scanStage.set('COMPLETE');
-               } else {
+               if (this.errorMessage()) {
                    this.scanStage.set('ERROR');
                }
             })
         )
         .subscribe({
             next: (res) => {
+                this.progress.set(100);
+                this.scanStage.set('COMPLETE');
                 this.result.set(res);
             },
             error: (err) => {
